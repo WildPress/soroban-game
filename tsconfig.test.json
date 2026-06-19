@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": ".tmp-test",
+    "rootDir": ".",
+    "noEmit": false
+  },
+  "include": ["src/soroban.ts", "test/**/*.ts"]
+}

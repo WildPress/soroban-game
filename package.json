@@ -1,0 +1,23 @@
+{
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "cad": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run typecheck && npm run test:unit",
+    "test:unit": "tsc -p tsconfig.test.json && node --test .tmp-test/test/*.test.js"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.3",
+    "playcanvas": "^2.19.7",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16"
+  },
+  "dependencies": {
+    "@jscad/modeling": "^2.13.0",
+    "@jscad/regl-renderer": "^2.6.15",
+    "@jscad/web": "^2.6.13"
+  }
+}

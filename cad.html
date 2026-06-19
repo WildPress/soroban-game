@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Soroban CAD</title>
+  </head>
+  <body>
+    <main class="cad-shell" aria-label="Soroban CAD viewer">
+      <canvas id="cad-canvas" aria-label="Soroban CAD model"></canvas>
+      <aside class="cad-panel">
+        <header>
+          <h1>Soroban CAD</h1>
+          <a href="/">Game</a>
+        </header>
+        <div id="cad-controls"></div>
+        <p id="cad-status" role="status">Loading model...</p>
+      </aside>
+    </main>
+
+    <script type="module" src="/src/cad.ts"></script>
+  </body>
+</html>

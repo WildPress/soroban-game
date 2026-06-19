@@ -1,0 +1,610 @@
+:root {
+  --board-light-x: 36%;
+  --board-light-y: 24%;
+  --bead-light-x: 36%;
+  --bead-light-y: 24%;
+  color: #eef3f8;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  background: #111417;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(216, 178, 95, 0.12), transparent 32rem),
+    #111417;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  min-height: 100vh;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: clamp(12px, 2vw, 20px);
+  padding: clamp(12px, 2vw, 22px);
+  overflow-x: auto;
+  perspective: 1200px;
+}
+
+.status-strip {
+  display: grid;
+  grid-template-columns: minmax(112px, 140px) minmax(112px, 140px) minmax(104px, 180px) minmax(86px, 110px);
+  gap: 8px;
+  align-self: start;
+}
+
+.status-strip > div,
+.control-panel {
+  border: 1px solid rgba(238, 243, 248, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 10, 12, 0.76);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.28);
+}
+
+.status-strip > div {
+  min-height: 68px;
+  padding: 10px 12px;
+}
+
+.label {
+  display: block;
+  color: #aeb9c1;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+strong {
+  display: block;
+  max-width: 100%;
+  margin-top: 4px;
+  overflow: hidden;
+  font-size: clamp(1.35rem, 3vw, 2.1rem);
+  line-height: 1;
+  text-overflow: ellipsis;
+}
+
+input,
+select {
+  width: 100%;
+  height: 32px;
+  margin-top: 5px;
+  border: 1px solid rgba(238, 243, 248, 0.18);
+  border-radius: 6px;
+  color: #eef3f8;
+  background: rgba(255, 255, 255, 0.06);
+  font-weight: 800;
+}
+
+.soroban-canvas {
+  align-self: center;
+  justify-self: center;
+  max-width: none;
+  min-width: 320px;
+  height: 560px;
+  border: 0;
+  background: #111417;
+  cursor: grab;
+  touch-action: none;
+}
+
+.soroban-canvas:active {
+  cursor: grabbing;
+}
+
+.soroban-board {
+  --column-w: clamp(74px, 5.55vw, 82px);
+  --bead-w: clamp(46px, 5.5vw, 66px);
+  --bead-h: clamp(33px, 4vw, 44px);
+  --slot-gap: clamp(31px, 3.8vw, 42px);
+  --upper-h: calc(var(--slot-gap) * 2 + 12px);
+  --lower-h: calc(var(--slot-gap) * 7 + 10px);
+  --beam-h: clamp(18px, 2.4vw, 26px);
+  --rod-w: 4px;
+  --frame-w: clamp(15px, 2vw, 24px);
+  --inner-pad: clamp(12px, 2vw, 22px);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(var(--columns), var(--column-w));
+  align-self: center;
+  justify-self: center;
+  width: max-content;
+  max-width: none;
+  min-height: calc(var(--upper-h) + var(--beam-h) + var(--lower-h));
+  margin: 0 auto;
+  padding: calc(var(--frame-w) + var(--inner-pad));
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 229, 173, 0.2),
+    inset 0 -4px 0 rgba(45, 24, 12, 0.42),
+    inset 3px 0 0 rgba(255, 229, 173, 0.08),
+    inset -3px 0 0 rgba(0, 0, 0, 0.25),
+    0 6px 0 #3f2415,
+    0 28px 50px rgba(0, 0, 0, 0.42);
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: none;
+  transform: rotateX(11deg) rotateZ(-0.8deg);
+  transform-origin: center bottom;
+  transform-style: preserve-3d;
+}
+
+.soroban-board::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 12px;
+  background: transparent;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 228, 172, 0.1),
+    0 5px 0 #3b2112,
+    0 26px 46px rgba(0, 0, 0, 0.44);
+  content: "";
+  pointer-events: none;
+  transform: translateZ(-10px);
+}
+
+.frame-piece {
+  position: absolute;
+  z-index: 5;
+  background:
+    radial-gradient(circle at var(--board-light-x) var(--board-light-y), rgba(255, 229, 176, 0.28), transparent 34%),
+    linear-gradient(180deg, rgba(255, 222, 158, 0.14), rgba(33, 15, 7, 0.28)),
+    url("/textures/walnut.png"),
+    #6f3f1d;
+  background-size: auto, auto, 100% 100%, auto;
+  background-blend-mode: screen, multiply, normal, normal;
+  background-repeat: no-repeat;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 226, 171, 0.14),
+    inset 0 -4px 0 rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.frame-top {
+  top: 0;
+  right: 0;
+  left: 0;
+  height: var(--frame-w);
+  clip-path: polygon(0 0, 100% 0, calc(100% - var(--frame-w)) 100%, var(--frame-w) 100%);
+}
+
+.frame-bottom {
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--frame-w);
+  clip-path: polygon(var(--frame-w) 0, calc(100% - var(--frame-w)) 0, 100% 100%, 0 100%);
+}
+
+.frame-left {
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--frame-w);
+  clip-path: polygon(0 0, 100% var(--frame-w), 100% calc(100% - var(--frame-w)), 0 100%);
+}
+
+.frame-right {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: var(--frame-w);
+  clip-path: polygon(0 var(--frame-w), 100% 0, 100% 100%, 0 calc(100% - var(--frame-w)));
+}
+
+.rod-column {
+  position: relative;
+  z-index: 3;
+  display: grid;
+  min-width: var(--bead-w);
+  grid-template-rows: var(--upper-h) var(--beam-h) var(--lower-h);
+  justify-items: center;
+}
+
+.rod {
+  position: absolute;
+  z-index: 1;
+  top: calc((var(--frame-w) + var(--inner-pad)) * -0.78);
+  bottom: calc((var(--frame-w) + var(--inner-pad)) * -0.78);
+  left: calc(50% - var(--rod-w) / 2);
+  width: var(--rod-w);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.34), transparent 42%),
+    #aeb7b1;
+  box-shadow:
+    inset -1px 0 0 rgba(0, 0, 0, 0.28),
+    1px 0 2px rgba(0, 0, 0, 0.24);
+}
+
+.upper-area,
+.lower-area {
+  position: relative;
+  width: 100%;
+}
+
+.beam-marker {
+  width: 100%;
+  height: var(--beam-h);
+}
+
+.reckoning-bar {
+  position: absolute;
+  top: calc(var(--frame-w) + var(--inner-pad) + var(--upper-h));
+  right: calc(var(--frame-w) + var(--inner-pad));
+  left: calc(var(--frame-w) + var(--inner-pad));
+  z-index: 4;
+  height: var(--beam-h);
+  display: grid;
+  grid-template-columns: repeat(var(--columns), var(--column-w));
+  align-items: center;
+  justify-items: center;
+  background:
+    radial-gradient(circle at var(--board-light-x) var(--board-light-y), rgba(255, 226, 165, 0.18), transparent 38%),
+    linear-gradient(180deg, rgba(255, 225, 157, 0.18), transparent 34%, rgba(0, 0, 0, 0.24)),
+    url("/textures/walnut.png"),
+    #5d3318;
+  background-size: auto, auto, 100% 100%, auto;
+  background-repeat: no-repeat;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 230, 171, 0.2),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.38),
+    0 3px 5px rgba(0, 0, 0, 0.28);
+}
+
+.reckoning-bar::before {
+  position: absolute;
+  inset: 0 calc(var(--inner-pad) * -1);
+  z-index: -1;
+  background: inherit;
+  background-repeat: no-repeat;
+  box-shadow: inherit;
+  content: "";
+}
+
+.place-dot {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at calc(var(--board-light-x) - 8%) calc(var(--board-light-y) - 8%), rgba(255, 255, 231, 0.9), transparent 24%),
+    radial-gradient(circle at 68% 70%, rgba(83, 47, 8, 0.55), transparent 42%),
+    url("/textures/brass.png"),
+    linear-gradient(180deg, #ffe28a, #b97618);
+  background-size: auto, auto, 80px 80px, auto;
+  background-blend-mode: screen, multiply, soft-light, normal;
+  box-shadow:
+    inset 0 1px 1px rgba(255, 250, 210, 0.8),
+    inset 0 -2px 2px rgba(70, 40, 8, 0.5),
+    0 1px 2px rgba(0, 0, 0, 0.28);
+}
+
+.bead {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  width: var(--bead-w);
+  height: var(--bead-h);
+  padding: 0;
+  border: 1px solid rgba(30, 18, 10, 0.68);
+  border-radius: 8px;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 120 96' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='black' d='M60 2 C67 2 109 33 117 48 C109 63 67 94 60 94 C53 94 11 63 3 48 C11 33 53 2 60 2 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg viewBox='0 0 120 96' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath fill='black' d='M60 2 C67 2 109 33 117 48 C109 63 67 94 60 94 C53 94 11 63 3 48 C11 33 53 2 60 2 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  color: transparent;
+  background:
+    radial-gradient(ellipse at var(--bead-light-x) var(--bead-light-y), rgba(255, 235, 174, 0.42), transparent 30%),
+    linear-gradient(180deg, rgba(255, 229, 160, 0.26), rgba(22, 9, 3, 0.12) 49%, rgba(0, 0, 0, 0.34) 52%, rgba(255, 218, 138, 0.08) 100%),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 212, 134, 0.34), transparent 16%, rgba(0, 0, 0, 0.15) 48%, rgba(0, 0, 0, 0.38) 100%),
+    url("/textures/walnut.png"),
+    linear-gradient(180deg, #b87538, #74401d 62%, #4c2512);
+  background-size: auto, auto, auto, 100% 100%, auto;
+  background-blend-mode: screen, multiply, multiply, soft-light, normal;
+  box-shadow:
+    inset 0 5px 8px rgba(255, 245, 204, 0.24),
+    inset 7px 0 9px rgba(255, 229, 161, 0.09),
+    inset -8px 0 10px rgba(0, 0, 0, 0.24),
+    inset 0 -7px 9px rgba(0, 0, 0, 0.28),
+    0 5px 8px rgba(0, 0, 0, 0.32);
+  cursor: grab;
+  transform: translateX(-50%);
+  transition:
+    top 130ms cubic-bezier(0.2, 0.7, 0.16, 1),
+    transform 130ms cubic-bezier(0.2, 0.7, 0.16, 1),
+    background 100ms ease;
+  touch-action: none;
+}
+
+.bead::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    radial-gradient(ellipse at var(--bead-light-x) var(--bead-light-y), rgba(255, 238, 190, 0.46), rgba(255, 238, 190, 0.16) 20%, transparent 38%),
+    radial-gradient(ellipse at calc(var(--bead-light-x) + 34%) calc(var(--bead-light-y) + 46%), rgba(0, 0, 0, 0.24), transparent 58%);
+  content: "";
+  mix-blend-mode: screen;
+  opacity: 0.84;
+  pointer-events: none;
+}
+
+.bead::after {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(180deg, rgba(255, 236, 178, 0.18), transparent 43%, rgba(255, 229, 166, 0.18) 49%, rgba(0, 0, 0, 0.34) 52%, transparent 58%, rgba(0, 0, 0, 0.28)),
+    radial-gradient(ellipse at 50% 50%, rgba(255, 230, 162, 0.22), transparent 18%, rgba(0, 0, 0, 0.14) 44%, transparent 64%);
+  content: "";
+  pointer-events: none;
+}
+
+.bead:active {
+  cursor: grabbing;
+}
+
+.bead.is-grabbed,
+.bead.is-drag-preview {
+  z-index: 5;
+}
+
+.bead.is-drag-preview {
+  transition: none;
+}
+
+.bead:focus-visible {
+  outline: 3px solid #54c7b8;
+  outline-offset: 2px;
+}
+
+.bead.upper {
+  top: calc(2px + var(--slot) * var(--slot-gap));
+}
+
+.bead.lower {
+  top: calc(2px + var(--slot) * var(--slot-gap));
+}
+
+.bead.is-active {
+  background:
+    radial-gradient(ellipse at var(--bead-light-x) var(--bead-light-y), rgba(146, 255, 229, 0.26), transparent 40%),
+    linear-gradient(180deg, rgba(107, 232, 197, 0.16), rgba(2, 26, 23, 0.12) 49%, rgba(0, 0, 0, 0.32) 52%, rgba(113, 241, 207, 0.08) 100%),
+    radial-gradient(ellipse at 50% 50%, rgba(107, 232, 197, 0.16), transparent 18%, rgba(2, 30, 27, 0.3) 56%, rgba(2, 30, 27, 0.42) 100%),
+    url("/textures/walnut.png"),
+    linear-gradient(180deg, #24947f, #0f5b50 62%, #07342f);
+  background-size: auto, auto, auto, 100% 100%, auto;
+  background-blend-mode: screen, overlay, multiply, soft-light, normal;
+}
+
+.bead.lower.is-place-bead {
+  background:
+    radial-gradient(ellipse at var(--bead-light-x) var(--bead-light-y), rgba(197, 213, 214, 0.32), transparent 36%),
+    linear-gradient(180deg, rgba(196, 208, 210, 0.14), rgba(1, 4, 5, 0.12) 49%, rgba(0, 0, 0, 0.42) 52%, rgba(112, 126, 128, 0.08) 100%),
+    radial-gradient(ellipse at 50% 50%, rgba(90, 104, 107, 0.22), transparent 18%, rgba(5, 8, 9, 0.42) 56%, rgba(0, 0, 0, 0.54) 100%),
+    url("/textures/walnut.png"),
+    linear-gradient(180deg, #252c2c, #0d1112 62%, #020303);
+  background-size: auto, auto, auto, 100% 100%, auto;
+  background-blend-mode: screen, overlay, multiply, soft-light, normal;
+}
+
+.bead.lower.is-place-bead.is-active {
+  background:
+    radial-gradient(ellipse at var(--bead-light-x) var(--bead-light-y), rgba(210, 225, 225, 0.34), transparent 36%),
+    linear-gradient(180deg, rgba(190, 205, 206, 0.16), rgba(1, 4, 5, 0.12) 49%, rgba(0, 0, 0, 0.42) 52%, rgba(105, 118, 120, 0.08) 100%),
+    radial-gradient(ellipse at 50% 50%, rgba(85, 101, 102, 0.22), transparent 18%, rgba(5, 8, 9, 0.44) 56%, rgba(0, 0, 0, 0.56) 100%),
+    url("/textures/walnut.png"),
+    linear-gradient(180deg, #202829, #0a0e0f 62%, #010202);
+  background-size: auto, auto, auto, 100% 100%, auto;
+  background-blend-mode: screen, overlay, multiply, luminosity, normal;
+}
+
+.control-panel {
+  width: min(860px, 100%);
+  padding: 14px;
+}
+
+.control-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.control-panel h1 {
+  margin: 0;
+  font-size: clamp(1.12rem, 4vw, 1.45rem);
+  line-height: 1.15;
+  letter-spacing: 0;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+button,
+.button-link {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 8px;
+  color: #081011;
+  background: #d8b25f;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+button:hover,
+.button-link:hover {
+  background: #efc773;
+}
+
+.column-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(32px, 1fr));
+  gap: 6px;
+}
+
+.column-value {
+  display: grid;
+  min-width: 0;
+  min-height: 34px;
+  place-items: center;
+  border: 1px solid rgba(238, 243, 248, 0.12);
+  border-radius: 6px;
+  color: #f7fbfb;
+  background: rgba(36, 116, 102, 0.7);
+  font-weight: 800;
+}
+
+@media (max-width: 640px) {
+  .app-shell {
+    grid-template-rows: auto auto auto;
+  }
+
+  .status-strip {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .status-strip > div {
+    min-height: 62px;
+    padding: 9px 10px;
+  }
+
+  .soroban-board {
+    --column-w: 64px;
+    --bead-w: 44px;
+    --bead-h: 34px;
+    --slot-gap: 32px;
+    transform: rotateX(8deg);
+  }
+
+  .control-panel header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions button {
+    flex: 1;
+  }
+}
+
+.cad-shell {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  background: #111417;
+}
+
+#cad-canvas {
+  width: 100%;
+  height: 100vh;
+  display: block;
+  cursor: grab;
+  touch-action: none;
+}
+
+#cad-canvas:active {
+  cursor: grabbing;
+}
+
+.cad-panel {
+  display: grid;
+  align-content: start;
+  gap: 14px;
+  border-left: 1px solid rgba(238, 243, 248, 0.14);
+  background: rgba(8, 10, 12, 0.88);
+  padding: 18px;
+}
+
+.cad-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cad-panel h1 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.cad-panel a {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  background: #d8b25f;
+  color: #081011;
+  padding: 0 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.cad-panel label {
+  display: grid;
+  gap: 6px;
+  color: #aeb9c1;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.cad-panel input {
+  margin-top: 0;
+}
+
+.cad-panel p {
+  margin: 4px 0 0;
+  color: #d8b25f;
+  line-height: 1.4;
+}
+
+@media (max-width: 760px) {
+  .cad-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  #cad-canvas {
+    height: min(70vh, 620px);
+  }
+
+  .cad-panel {
+    border-top: 1px solid rgba(238, 243, 248, 0.14);
+    border-left: 0;
+  }
+}
