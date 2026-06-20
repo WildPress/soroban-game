@@ -51,8 +51,9 @@ type BeadEntity = Readonly<{
   meshInstance: pc.MeshInstance;
   isPlaceBead: boolean;
 }>;
-const canvasHeight = 560;
 const horizontalPagePadding = 44;
+const minCanvasHeight = 220;
+const maxCanvasHeight = 360;
 const beadCenterZ = 0;
 const jscadOutputScale = 18;
 const defaultBeadShape = {
@@ -141,12 +142,12 @@ export class PlayCanvasSorobanRenderer {
 
   rebuild(state: SorobanState): void {
     const model = createSorobanModel(state);
-    const canvasWidth = getDisplayCanvasWidth();
+    const canvasSize = getDisplayCanvasSize(model.config.columns);
 
     this.canvas.style.setProperty('--columns', model.config.columns.toString());
-    this.canvas.style.width = `${canvasWidth}px`;
-    this.canvas.style.height = `${canvasHeight}px`;
-    this.app.resizeCanvas(canvasWidth, canvasHeight);
+    this.canvas.style.width = `${canvasSize.width}px`;
+    this.canvas.style.height = `${canvasSize.height}px`;
+    this.app.resizeCanvas(canvasSize.width, canvasSize.height);
     this.cadMeshes.forEach((mesh) => mesh.destroy());
     this.cadMeshes = [];
     this.root.children.slice().forEach((child) => child.destroy());
@@ -254,7 +255,8 @@ export class PlayCanvasSorobanRenderer {
     const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspect);
     const distanceForHeight = height / (2 * Math.tan(verticalFov / 2));
     const distanceForWidth = width / (2 * Math.tan(horizontalFov / 2));
-    const distance = Math.max(distanceForHeight, distanceForWidth) * 1.18;
+    const padding = width < 4 ? 1.08 : 1.02;
+    const distance = Math.max(distanceForHeight, distanceForWidth) * padding;
 
     this.camera.setLocalPosition(0, -0.72, distance);
     this.camera.lookAt(0, -0.24, 0);
@@ -377,7 +379,8 @@ function addJscadSorobanMeshes(
 ): CadRenderLayout {
   const geometries = normalizeCadGeometries(loadSorobanCadModule().main(createJscadParams(state, beadShape)));
   const bounds = geometries.map(getCadBounds);
-  const globalBounds = combineCadBounds(bounds);
+  const visibleBounds = bounds.filter((bound) => !isViewportAnchorBounds(bound));
+  const globalBounds = combineCadBounds(visibleBounds);
   const model = createSorobanModel(state);
   const frameThickness = model.frame.thickness * 1.9;
   const layout = {
@@ -831,10 +834,20 @@ function toRgba(hex: string, alpha: number): string {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
-function getDisplayCanvasWidth(): number {
+function getDisplayCanvasSize(columns: number): { width: number; height: number } {
+  const width = getDisplayCanvasWidth(columns);
+  const viewportHeight = typeof window === 'undefined' ? 900 : window.innerHeight;
+  const height = Math.round(Math.min(maxCanvasHeight, Math.max(minCanvasHeight, viewportHeight * 0.32)));
+
+  return { width, height };
+}
+
+function getDisplayCanvasWidth(columns: number): number {
+  const desiredWidth = Math.max(300, columns * 86 + 112);
+
   if (typeof window === 'undefined') {
-    return 1280 - horizontalPagePadding;
+    return desiredWidth;
   }
 
-  return Math.max(320, window.innerWidth - horizontalPagePadding);
+  return Math.round(Math.min(desiredWidth, Math.max(300, window.innerWidth - horizontalPagePadding)));
 }

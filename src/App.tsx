@@ -82,9 +82,10 @@ const numberBoardDimensions = {
   height: 3
 } as const;
 const boardValues = createInitialBoardValues();
+const sorobanColumns = getRequiredSorobanColumns(boardValues);
 
 export function App() {
-  const [state, setState] = useState<SorobanState>(() => createSorobanState({ columns: 13 }));
+  const [state, setState] = useState<SorobanState>(() => createSorobanState({ columns: sorobanColumns }));
   const [numberBoard, setNumberBoard] = useState<NumberBoardState>(() => createNumberBoard(boardValues, numberBoardDimensions));
   const [theme, setTheme] = useState<ThemeName>('walnut');
   const [styleName, setStyleNameState] = useState<StyleName>(() => getSavedStyleName());
@@ -187,10 +188,10 @@ export function App() {
             id="columns"
             type="number"
             min="1"
-            max="21"
+            max={sorobanColumns}
             value={state.config.columns}
             onChange={(event) => {
-              const columns = Number(event.currentTarget.value);
+              const columns = clampNumber(Number(event.currentTarget.value), [1, sorobanColumns], sorobanColumns);
 
               setState((currentState) => createSorobanState({
                 columns,
@@ -427,4 +428,10 @@ function createInitialBoardValues(): readonly number[] {
   return createUniquePairBoardValues(numberBoardDimensions.width * numberBoardDimensions.height, {
     seeds: [27, 4, 8, 60, 71, 3, 13]
   });
+}
+
+function getRequiredSorobanColumns(values: readonly number[]): number {
+  const maxGameTotal = values.reduce((sum, value) => sum + value, 0);
+
+  return Math.max(1, String(maxGameTotal).length);
 }

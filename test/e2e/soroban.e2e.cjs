@@ -24,52 +24,51 @@ async function main() {
 }
 
 async function testAppValueDisplay(browser) {
-  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, deviceScaleFactor: 1 });
+  const page = await browser.newPage({ viewport: { width: 390, height: 740 }, deviceScaleFactor: 1 });
   const failures = collectFailures(page);
 
   await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('#column-controls .column-value');
   await page.waitForTimeout(1000);
 
-  await expectColumnValues(page, Array.from({ length: 13 }, () => '0'));
+  assert.equal(await page.locator('#columns').getAttribute('max'), '3');
+  await expectColumnValues(page, Array.from({ length: 3 }, () => '0'));
   await expectNumberBoardReady(page);
+  await expectAppFitsViewport(page);
 
-  await page.locator('#columns').fill('5');
+  await page.locator('#columns').fill('2');
   await page.locator('#columns').dispatchEvent('change');
   await page.waitForTimeout(750);
-  await expectColumnValues(page, Array.from({ length: 5 }, () => '0'));
-  await page.locator('#soroban-canvas').screenshot({ path: `${artifactDir}/app-columns-5.png` });
+  await expectColumnValues(page, Array.from({ length: 2 }, () => '0'));
+  await page.locator('#soroban-canvas').screenshot({ path: `${artifactDir}/app-columns-2.png` });
+  await expectAppFitsViewport(page);
 
-  await page.locator('#columns').fill('13');
+  await page.locator('#columns').fill('3');
   await page.locator('#columns').dispatchEvent('change');
   await page.waitForTimeout(750);
-  await page.locator('#soroban-canvas').screenshot({ path: `${artifactDir}/app-columns-13.png` });
+  await page.locator('#soroban-canvas').screenshot({ path: `${artifactDir}/app-columns-3.png` });
   await page.locator('#randomize').click();
   await page.waitForTimeout(250);
   const randomizedValues = await columnValues(page);
-  assert.equal(randomizedValues.length, 13);
-  assert.match(randomizedValues.join(''), /^[0-9]{13}$/);
+  assert.equal(randomizedValues.length, 3);
+  assert.match(randomizedValues.join(''), /^[0-9]{3}$/);
   assert.equal(await page.locator('#board-target').innerText(), String(Number(randomizedValues.join(''))));
 
-  await page.locator('#columns').fill('5');
+  await page.locator('#columns').fill('2');
   await page.locator('#columns').dispatchEvent('change');
   await page.waitForTimeout(750);
-  const lowPlaceSuffix = randomizedValues.slice(-5);
+  const lowPlaceSuffix = randomizedValues.slice(-2);
   await expectColumnValues(page, lowPlaceSuffix);
 
-  await page.locator('#columns').fill('8');
+  await page.locator('#columns').fill('3');
   await page.locator('#columns').dispatchEvent('change');
   await page.waitForTimeout(750);
-  await expectColumnValues(page, ['0', '0', '0', ...lowPlaceSuffix]);
-
-  await page.locator('#columns').fill('21');
-  await page.locator('#columns').dispatchEvent('change');
-  await page.waitForTimeout(750);
-  await page.locator('#soroban-canvas').screenshot({ path: `${artifactDir}/app-columns-21.png` });
+  await expectColumnValues(page, ['0', ...lowPlaceSuffix]);
 
   await page.locator('#reset').click();
   await page.waitForTimeout(250);
-  await expectColumnValues(page, Array.from({ length: 21 }, () => '0'));
+  await expectColumnValues(page, Array.from({ length: 3 }, () => '0'));
+  await expectAppFitsViewport(page);
 
   assertNoFailures(failures, 'app value display');
   await page.close();
@@ -138,6 +137,26 @@ async function expectNumberBoardReady(page) {
   assert.equal(await page.locator('#number-board .number-cell').count(), 9);
   assert.equal(await page.locator('#board-target').innerText(), '0');
   assert.equal(await page.locator('#board-go').isDisabled(), true);
+}
+
+async function expectAppFitsViewport(page) {
+  const metrics = await page.evaluate(() => {
+    const canvas = document.querySelector('#soroban-canvas');
+    const rect = canvas?.getBoundingClientRect();
+
+    return {
+      scrollHeight: document.documentElement.scrollHeight,
+      viewportHeight: window.innerHeight,
+      bodyOverflow: getComputedStyle(document.body).overflow,
+      canvasBottom: rect?.bottom ?? 0,
+      canvasHeight: rect?.height ?? 0
+    };
+  });
+
+  assert.equal(metrics.bodyOverflow, 'hidden');
+  assert.ok(metrics.scrollHeight <= metrics.viewportHeight + 1, `expected app to fit viewport, got scrollHeight ${metrics.scrollHeight}`);
+  assert.ok(metrics.canvasHeight >= 220, `expected visible soroban canvas, got height ${metrics.canvasHeight}`);
+  assert.ok(metrics.canvasBottom <= metrics.viewportHeight, `expected soroban canvas in viewport, bottom ${metrics.canvasBottom}`);
 }
 
 function collectFailures(page) {
