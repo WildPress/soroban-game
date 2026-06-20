@@ -134,9 +134,22 @@ async function columnValues(page) {
 
 async function expectNumberBoardReady(page) {
   await page.waitForSelector('#number-board .number-cell');
+  await page.waitForSelector('#number-board .number-board-canvas');
   assert.equal(await page.locator('#number-board .number-cell').count(), 9);
   assert.equal(await page.locator('#board-target').innerText(), '0');
   assert.equal(await page.locator('#board-go').isDisabled(), true);
+
+  const bubbleCanvas = await page.locator('#number-board .number-board-canvas').evaluate((canvas) => {
+    const rect = canvas.getBoundingClientRect();
+
+    return {
+      width: rect.width,
+      height: rect.height
+    };
+  });
+
+  assert.ok(bubbleCanvas.width > 200, `expected WebGL bubble board width, got ${bubbleCanvas.width}`);
+  assert.ok(bubbleCanvas.height > 200, `expected WebGL bubble board height, got ${bubbleCanvas.height}`);
 }
 
 async function expectAppFitsViewport(page) {

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   commitNumberBoardSelection,
   createNumberBoard,
+  createSeededNumberBoardValues,
   createUniquePairBoardValues,
   getHighlightedCells,
   previewNumberBoardValue
@@ -59,6 +60,13 @@ test('generated board values have unique pair sums and seeded addition examples'
   assertUniquePairSums(values);
 });
 
+test('starter 3 by 3 board seed is deterministic', () => {
+  const values = createSeededNumberBoardValues('starter-3x3-v1');
+
+  assert.deepEqual(values, [27, 4, 8, 60, 71, 3, 13, 6, 42]);
+  assert.notEqual(values, createSeededNumberBoardValues('starter-3x3-v1'));
+});
+
 test('isolated pair sums can still be matched directly', () => {
   const board = createNumberBoard(makeValues([43, 45]));
   const preview = previewNumberBoardValue(board, 88);
@@ -98,7 +106,7 @@ test('chains addition highlights as the soroban total grows', () => {
   assert.deepEqual(getHighlightedCells(fifthPreview.state).map((cell) => cell.value), [27, 4, 8, 60, 71]);
 });
 
-test('chain extension can add multiple board numbers at once', () => {
+test('chain extension waits for one board number at a time', () => {
   const board = createNumberBoard(createUniquePairBoardValues(100, {
     seeds: [27, 4, 8, 60, 71, 3, 13]
   }));
@@ -108,8 +116,26 @@ test('chain extension can add multiple board numbers at once', () => {
   );
   const preview = previewNumberBoardValue(partialChain, 170);
 
-  assert.equal(preview.kind, 'extension');
-  assert.deepEqual(getHighlightedCells(preview.state).map((cell) => cell.value), [27, 4, 8, 60, 71]);
+  assert.equal(preview.kind, 'none');
+  assert.equal(preview.sum, 39);
+  assert.deepEqual(getHighlightedCells(preview.state).map((cell) => cell.value), [27, 4, 8]);
+});
+
+test('keeps a partial chain through unresolved intermediate totals', () => {
+  const board = createNumberBoard(createSeededNumberBoardValues('starter-3x3-v1'), { width: 3, height: 3 });
+  const partialChain = [4, 12, 15].reduce(
+    (currentBoard, value) => previewNumberBoardValue(currentBoard, value).state,
+    board
+  );
+  const unresolvedPreview = previewNumberBoardValue(partialChain, 55);
+  const completedPreview = previewNumberBoardValue(unresolvedPreview.state, 57);
+
+  assert.equal(unresolvedPreview.kind, 'none');
+  assert.equal(unresolvedPreview.sum, 15);
+  assert.deepEqual(getHighlightedCells(unresolvedPreview.state).map((cell) => cell.value), [4, 8, 3]);
+  assert.equal(completedPreview.kind, 'extension');
+  assert.equal(completedPreview.sum, 57);
+  assert.deepEqual(getHighlightedCells(completedPreview.state).map((cell) => cell.value), [4, 8, 3, 42]);
 });
 
 test('go can remove a completed addition chain', () => {

@@ -41,6 +41,12 @@ export type UniquePairBoardOptions = Readonly<{
   minValue?: number;
 }>;
 
+const seededNumberBoardValues = {
+  'starter-3x3-v1': [27, 4, 8, 60, 71, 3, 13, 6, 42]
+} as const satisfies Record<string, readonly number[]>;
+
+export type NumberBoardSeed = keyof typeof seededNumberBoardValues;
+
 const defaultWidth = 10;
 const defaultHeight = 10;
 const defaultMaxAddends = 5;
@@ -99,20 +105,29 @@ export function previewNumberBoardValue(
 
   if (highlightedCells.length > 0 && highlightedSum < target) {
     const remainingCells = activeCells.filter((cell) => !state.highlightedCellIds.includes(cell.id));
-    const extension = findUniqueCellCombination(remainingCells, target - highlightedSum, maxAddends - highlightedCells.length);
+    const remainingValue = target - highlightedSum;
+    const exactExtensions = remainingCells.filter((cell) => cell.value === remainingValue);
 
-    if (extension.kind === 'unique') {
+    if (exactExtensions.length === 1) {
+      const extension = exactExtensions[0];
+
+      if (!extension) {
+        return toPreview(state, target, highlightedCells.map((cell) => cell.id), 'none');
+      }
+
       return toPreview(
         state,
         target,
-        [...highlightedCells.map((cell) => cell.id), ...extension.cells.map((cell) => cell.id)],
+        [...highlightedCells.map((cell) => cell.id), extension.id],
         'extension'
       );
     }
 
-    if (extension.kind === 'ambiguous') {
-      return toPreview(state, target, [], 'ambiguous');
+    if (exactExtensions.length > 1) {
+      return toPreview(state, target, highlightedCells.map((cell) => cell.id), 'ambiguous');
     }
+
+    return toPreview(state, target, highlightedCells.map((cell) => cell.id), 'none');
   }
 
   const exactMatches = activeCells.filter((cell) => cell.value === target);
@@ -166,6 +181,10 @@ export function createUniquePairBoardValues(count: number, options: UniquePairBo
   }
 
   return values;
+}
+
+export function createSeededNumberBoardValues(seed: NumberBoardSeed): readonly number[] {
+  return [...seededNumberBoardValues[seed]];
 }
 
 export function commitNumberBoardSelection(state: NumberBoardState): NumberBoardCommit {

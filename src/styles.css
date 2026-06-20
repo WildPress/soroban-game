@@ -150,24 +150,34 @@ select {
 }
 
 .number-board {
+  position: relative;
   display: grid;
   gap: 6px;
 }
 
+.number-board-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .number-cell {
+  position: relative;
+  z-index: 1;
   display: grid;
   aspect-ratio: 1;
   min-width: 0;
   place-items: center;
-  border: 1px solid rgba(238, 243, 248, 0.18);
+  border: 1px solid transparent;
   border-radius: 50%;
   color: #eef3f8;
-  background:
-    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.18), transparent 36%),
-    rgba(255, 255, 255, 0.06);
+  background: transparent;
   font-size: clamp(0.9rem, 4vw, 1.2rem);
   font-weight: 800;
   line-height: 1;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.88);
   transition:
     opacity 140ms ease,
     transform 140ms ease,
@@ -176,11 +186,10 @@ select {
 }
 
 .number-cell.is-highlighted {
-  border-color: rgba(255, 197, 88, 0.95);
+  border-color: transparent;
   color: #160d05;
-  background:
-    radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.48), transparent 36%),
-    #f2a431;
+  background: transparent;
+  text-shadow: 0 1px 8px rgba(255, 225, 154, 0.54);
   transform: translateY(-2px) scale(1.06);
 }
 

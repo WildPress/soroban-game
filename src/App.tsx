@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSorobanState, getTotalValue, type SorobanState } from './soroban.js';
 import { PlayCanvasBoard } from './PlayCanvasBoard.js';
+import { PlayCanvasNumberBoard } from './PlayCanvasNumberBoard.js';
 import type { BeadShapeStyle, ThemeName } from './playcanvasSoroban.js';
 import {
   commitNumberBoardSelection,
   createNumberBoard,
-  createUniquePairBoardValues,
+  createSeededNumberBoardValues,
+  getHighlightedCells,
   previewNumberBoardValue,
   type NumberBoardState
 } from './numberBoardGame.js';
@@ -81,6 +83,7 @@ const numberBoardDimensions = {
   width: 3,
   height: 3
 } as const;
+const numberBoardSeed = 'starter-3x3-v1';
 const boardValues = createInitialBoardValues();
 const sorobanColumns = getRequiredSorobanColumns(boardValues);
 
@@ -93,6 +96,8 @@ export function App() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeBeadShape = styleName === 'custom' ? customStyle : stylePresets[styleName].beadShape;
   const sorobanValue = getTotalValue(state);
+  const highlightedBoardValue = getHighlightedCells(numberBoard).reduce((sum, cell) => sum + cell.value, 0);
+  const canCommitBoardSelection = numberBoard.highlightedCellIds.length > 0 && highlightedBoardValue === numberBoard.targetValue;
 
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -253,7 +258,7 @@ export function App() {
           <button
             id="board-go"
             type="button"
-            disabled={numberBoard.highlightedCellIds.length === 0}
+            disabled={!canCommitBoardSelection}
             onClick={commitBoardSelection}
           >
             Go
@@ -264,6 +269,7 @@ export function App() {
           className="number-board"
           style={{ gridTemplateColumns: `repeat(${numberBoard.width}, minmax(0, 1fr))` }}
         >
+          <PlayCanvasNumberBoard state={numberBoard} />
           {numberBoard.cells.map((cell) => {
             const highlighted = numberBoard.highlightedCellIds.includes(cell.id);
 
@@ -425,9 +431,7 @@ function roundToStep(value: number, step: number): number {
 }
 
 function createInitialBoardValues(): readonly number[] {
-  return createUniquePairBoardValues(numberBoardDimensions.width * numberBoardDimensions.height, {
-    seeds: [27, 4, 8, 60, 71, 3, 13]
-  });
+  return createSeededNumberBoardValues(numberBoardSeed);
 }
 
 function getRequiredSorobanColumns(values: readonly number[]): number {
