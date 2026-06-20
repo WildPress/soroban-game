@@ -29,6 +29,10 @@ body {
     #111417;
 }
 
+#root {
+  min-height: 100vh;
+}
+
 button,
 input,
 select {
@@ -47,7 +51,7 @@ select {
 
 .status-strip {
   display: grid;
-  grid-template-columns: minmax(112px, 140px) minmax(112px, 140px) minmax(104px, 180px) minmax(86px, 110px);
+  grid-template-columns: minmax(112px, 140px) minmax(112px, 140px) minmax(160px, 190px);
   gap: 8px;
   align-self: start;
 }
@@ -94,6 +98,28 @@ select {
   color: #eef3f8;
   background: rgba(255, 255, 255, 0.06);
   font-weight: 800;
+}
+
+.inline-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  gap: 6px;
+  align-items: end;
+}
+
+.inline-control select {
+  min-width: 0;
+}
+
+.icon-button {
+  display: grid;
+  width: 44px;
+  min-height: 32px;
+  margin-top: 5px;
+  place-items: center;
+  padding: 0;
+  border-radius: 6px;
+  line-height: 1;
 }
 
 .soroban-canvas {
@@ -516,95 +542,9 @@ button:hover,
     width: 100%;
   }
 
-  .actions button {
+  .actions button,
+  .actions .button-link {
     flex: 1;
-  }
-}
-
-.cad-shell {
-  display: grid;
-  min-height: 100vh;
-  grid-template-columns: minmax(0, 1fr) 280px;
-  background: #111417;
-}
-
-#cad-canvas {
-  width: 100%;
-  height: 100vh;
-  display: block;
-  cursor: grab;
-  touch-action: none;
-}
-
-#cad-canvas:active {
-  cursor: grabbing;
-}
-
-.cad-panel {
-  display: grid;
-  align-content: start;
-  gap: 14px;
-  border-left: 1px solid rgba(238, 243, 248, 0.14);
-  background: rgba(8, 10, 12, 0.88);
-  padding: 18px;
-}
-
-.cad-panel header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.cad-panel h1 {
-  margin: 0;
-  font-size: 1.15rem;
-}
-
-.cad-panel a {
-  min-height: 34px;
-  display: inline-flex;
-  align-items: center;
-  border-radius: 6px;
-  background: #d8b25f;
-  color: #081011;
-  padding: 0 12px;
-  font-weight: 800;
-  text-decoration: none;
-}
-
-.cad-panel label {
-  display: grid;
-  gap: 6px;
-  color: #aeb9c1;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.cad-panel input {
-  margin-top: 0;
-}
-
-.cad-panel p {
-  margin: 4px 0 0;
-  color: #d8b25f;
-  line-height: 1.4;
-}
-
-@media (max-width: 760px) {
-  .cad-shell {
-    grid-template-columns: 1fr;
-    grid-template-rows: minmax(0, 1fr) auto;
-  }
-
-  #cad-canvas {
-    height: min(70vh, 620px);
-  }
-
-  .cad-panel {
-    border-top: 1px solid rgba(238, 243, 248, 0.14);
-    border-left: 0;
+    justify-content: center;
   }
 }

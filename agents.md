@@ -1,0 +1,9 @@
+# Agent Notes
+
+- For soroban CAD geometry or column-layout changes, verify in the real `jscadui/apps/jscad-web` UI with the Playwright container, not just unit tests. Load `http://172.17.0.1:5120/#./soroban-cad.jscad.js` from inside the container and test at least 5, 13, and 21 columns.
+- Run `npm run test:e2e:container` for the Playwright container workflow. It starts a reachable Vite app server, tests app value display, drives `jscad-web` column changes, and writes screenshots to `.tmp-test/e2e`.
+- When anchoring columns from the right, keep the frame internally consistent: rods, side posts, top/bottom rails, and the reckoning bar must share the same horizontal frame center. A common mistake is offsetting only `leftX`/`rightX` and rods while leaving horizontal frame members at `x = 0`.
+- Column resizing should add/remove high-place columns on the left. Preserve the rightmost low-place value suffix when shrinking, and pad zeros on the left when expanding.
+- In `jscad-web`, parameter changes trigger auto-fit/recentering to the current model bounds. This can make a right-anchored model look like it is still growing from the right. For CAD previews where a visual anchor must stay fixed, include a transparent fixed-size viewport/bounds solid, such as the 21-column envelope used in `public/soroban-cad.jscad.js`, so the viewer fits to stable bounds across parameter changes.
+- React owns the app state and UI. Keep PlayCanvas behind `src/PlayCanvasBoard.tsx` until the renderer is deliberately migrated; `src/playcanvasSoroban.ts` remains the direct engine renderer and must expose clean lifecycle methods for React mount/unmount.
+- `@playcanvas/react` is installed for future declarative scene work. Its `<Application>` component maps to a single canvas, and hooks such as `useApp` must run under that component context.

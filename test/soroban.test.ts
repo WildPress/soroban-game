@@ -68,13 +68,25 @@ test('wraps incremental column input and reads the total value', () => {
   assert.equal(getTotalValue(state), 9230);
 });
 
-test('scales geometry width from the requested column count', () => {
+test('resizes columns from the high-place left side', () => {
+  const smaller = createSorobanState({ columns: 5, values: [1, 2, 3, 4, 5, 6, 7] });
+  const larger = createSorobanState({ columns: 8, values: smaller.values });
+
+  assert.equal(serializeSoroban(smaller), '34567');
+  assert.equal(serializeSoroban(larger), '00034567');
+});
+
+test('keeps geometry centered as column count changes', () => {
   const small = createSorobanModel(createSorobanState({ columns: 5 }));
   const large = createSorobanModel(createSorobanState({ columns: 17 }));
 
   assert.ok(large.frame.width > small.frame.width);
-  assert.equal(small.columns[0]?.x, -(small.columns[4]?.x ?? Number.NaN));
-  assert.equal(large.columns[0]?.x, -(large.columns[16]?.x ?? Number.NaN));
+  assert.equal((small.frame.leftX + small.frame.rightX) / 2, 0);
+  assert.equal((large.frame.leftX + large.frame.rightX) / 2, 0);
+  assert.equal(small.columns[2]?.x, 0);
+  assert.equal(large.columns[8]?.x, 0);
+  assert.ok(large.frame.rightX > small.frame.rightX);
+  assert.ok(large.frame.leftX < small.frame.leftX);
 });
 
 test('clicking an inactive lower bead pulls that bead and the beads above it up', () => {

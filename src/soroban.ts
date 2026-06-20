@@ -102,16 +102,16 @@ const DEFAULT_CONFIG = {
   columns: 13,
   rodSpacing: 0.72,
   beadWidth: 0.46,
-  beadHeight: 0.3,
+  beadHeight: 0.4,
   beadDepth: 0.24,
-  beadStep: 0.36,
-  inactiveGap: 0.54,
-  upperRestY: 0.88,
+  beadStep: 0.448,
+  inactiveGap: 0.648,
+  upperRestY: 0.978,
   upperActiveY: 0.33,
-  lowerActiveStartY: -0.28,
+  lowerActiveStartY: -0.34,
   framePaddingX: 0.52,
-  frameTopY: 1.35,
-  frameBottomY: -2.28,
+  frameTopY: 1.478,
+  frameBottomY: -2.832,
   frameThickness: 0.14,
   beamThickness: 0.18
 } as const satisfies SorobanConfig;
@@ -119,11 +119,11 @@ const DEFAULT_CONFIG = {
 export function createSorobanState(options: SorobanOptions = {}): SorobanState {
   const config = normalizeConfig(options);
   const values = Array.isArray(options.values)
-    ? options.values.slice(0, config.columns).map(toDigit)
+    ? options.values.slice(-config.columns).map(toDigit)
     : [];
 
   while (values.length < config.columns) {
-    values.push(0);
+    values.unshift(0);
   }
 
   return {

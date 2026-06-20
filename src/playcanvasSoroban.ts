@@ -1,4 +1,6 @@
 import * as pc from 'playcanvas';
+import sorobanCadSource from '../public/soroban-cad.jscad.js?raw';
+import * as jscadModeling from '@jscad/modeling';
 import { geometries, primitives } from '@jscad/modeling';
 import {
   createSorobanModel,
@@ -7,53 +9,74 @@ import {
 } from './soroban.js';
 
 export type ThemeName = 'walnut' | 'ash' | 'slate';
+export type BeadShapeStyle = Readonly<{
+  tipRadius: number;
+  shoulderRadius: number;
+  waistRadius: number;
+  roundness?: number;
+  smoothness?: number;
+}>;
 
 export type RenderedBeadHit = Readonly<{
   bead: BeadModel;
 }>;
 
-type BeadEntity = Readonly<{
-  entity: pc.Entity;
-  meshInstance: pc.MeshInstance;
-  bead: BeadModel;
-  isPlaceBead: boolean;
-}>;
-
 type Geom3 = ReturnType<typeof primitives.cuboid>;
 type Vec3Tuple = [number, number, number];
-type RodSegment = Readonly<{
+type CadGeometry = Geom3 & {
+  color?: readonly [number, number, number, number];
+};
+type CadModule = Readonly<{
+  main: (params: Record<string, unknown>) => CadGeometry | readonly CadGeometry[];
+}>;
+type CadBounds = Readonly<{
+  min: Vec3Tuple;
+  max: Vec3Tuple;
+  width: number;
+  height: number;
+  depth: number;
+}>;
+type CadRenderLayout = Readonly<{
+  centerX: number;
   centerY: number;
-  length: number;
+  centerZ: number;
+  modelBottomY: number;
+  width: number;
+  height: number;
 }>;
-type BeadShape = Readonly<{
-  tipRadius: number;
-  shoulderRadius: number;
-  waistRadius: number;
+type CadMaterialKind = 'frame' | 'bead' | 'placeBead' | 'brass' | 'rod';
+type BeadEntity = Readonly<{
+  bead: BeadModel;
+  entity: pc.Entity;
+  meshInstance: pc.MeshInstance;
+  isPlaceBead: boolean;
 }>;
-
-const columnPixelWidth = 82;
 const canvasHeight = 560;
 const horizontalPagePadding = 44;
 const beadCenterZ = 0;
-const rodCenterZ = beadCenterZ;
+const jscadOutputScale = 18;
 const defaultBeadShape = {
   tipRadius: 0.045,
   shoulderRadius: 0.33,
   waistRadius: 0.5
-} as const satisfies BeadShape;
-const placeDotDepth = 0.02;
+} as const satisfies BeadShapeStyle;
 
 export class PlayCanvasSorobanRenderer {
   private readonly app: pc.Application;
   private readonly camera: pc.Entity;
   private readonly keyLight: pc.Entity;
   private readonly fillLight: pc.Entity;
-  private readonly pointerLight: pc.Entity;
+  private readonly accentLight: pc.Entity;
   private readonly root: pc.Entity;
   private materials: ReturnType<typeof createMaterials>;
-  private meshes: ReturnType<typeof createCadMeshes>;
+  private beadShape: BeadShapeStyle = defaultBeadShape;
   private readonly screenPoint = new pc.Vec3();
+  private readonly worldPoint = new pc.Vec3();
+  private logicalBeads: readonly BeadModel[] = [];
   private beadEntities = new Map<string, BeadEntity>();
+  private cadMeshes: pc.Mesh[] = [];
+  private renderLayout: CadRenderLayout | null = null;
+  private renderedState: SorobanState | null = null;
   private animationFrame: number | null = null;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
@@ -65,11 +88,10 @@ export class PlayCanvasSorobanRenderer {
     });
     this.app.setCanvasFillMode(pc.FILLMODE_NONE);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
-    this.app.scene.ambientLight = new pc.Color(0.68, 0.66, 0.6);
-    this.app.scene.exposure = 1.05;
+    this.app.scene.ambientLight = new pc.Color(0.68, 0.64, 0.58);
+    this.app.scene.exposure = 1.28;
 
     this.materials = createMaterials(this.app.graphicsDevice, 'walnut');
-    this.meshes = createCadMeshes(this.app.graphicsDevice);
     this.root = new pc.Entity('parametric-soroban');
 
     this.camera = new pc.Entity('camera');
@@ -86,132 +108,63 @@ export class PlayCanvasSorobanRenderer {
     this.keyLight = new pc.Entity('key-light');
     this.keyLight.addComponent('light', {
       castShadows: false,
-      color: new pc.Color(1, 0.98, 0.92),
-      intensity: 1.2,
+      color: new pc.Color(1, 0.94, 0.84),
+      intensity: 2.18,
       shadowBias: 0.08,
       type: 'directional'
     });
-    this.keyLight.setLocalEulerAngles(42, 28, 18);
+    this.keyLight.setLocalEulerAngles(50, 24, 12);
     this.app.root.addChild(this.keyLight);
 
     this.fillLight = new pc.Entity('fill-light');
     this.fillLight.addComponent('light', {
       castShadows: false,
-      color: new pc.Color(0.72, 0.8, 1),
-      intensity: 0.46,
+      color: new pc.Color(0.68, 0.76, 1),
+      intensity: 0.54,
       type: 'directional'
     });
-    this.fillLight.setLocalEulerAngles(-24, -34, 0);
+    this.fillLight.setLocalEulerAngles(-22, -42, 0);
     this.app.root.addChild(this.fillLight);
 
-    this.pointerLight = new pc.Entity('pointer-light');
-    this.pointerLight.addComponent('light', {
-      color: new pc.Color(1, 0.96, 0.86),
-      intensity: 0.36,
-      range: 6,
+    this.accentLight = new pc.Entity('accent-light');
+    this.accentLight.addComponent('light', {
+      color: new pc.Color(1, 0.82, 0.56),
+      intensity: 0.34,
+      range: 7.5,
       type: 'omni'
     });
-    this.pointerLight.setLocalPosition(0, 0, 2.6);
-    this.app.root.addChild(this.pointerLight);
+    this.accentLight.setLocalPosition(-1.8, 1.4, 3.2);
+    this.app.root.addChild(this.accentLight);
     this.app.root.addChild(this.root);
     this.app.start();
   }
 
   rebuild(state: SorobanState): void {
     const model = createSorobanModel(state);
-    const modelCanvasWidth = getCanvasWidth(model.config.columns);
-    const canvasWidth = getDisplayCanvasWidth(modelCanvasWidth);
+    const canvasWidth = getDisplayCanvasWidth();
 
     this.canvas.style.setProperty('--columns', model.config.columns.toString());
     this.canvas.style.width = `${canvasWidth}px`;
     this.canvas.style.height = `${canvasHeight}px`;
     this.app.resizeCanvas(canvasWidth, canvasHeight);
+    this.cadMeshes.forEach((mesh) => mesh.destroy());
+    this.cadMeshes = [];
     this.root.children.slice().forEach((child) => child.destroy());
+    this.logicalBeads = model.beads;
     this.beadEntities = new Map<string, BeadEntity>();
-    this.meshes = createCadMeshes(this.app.graphicsDevice);
-
-    const frameDepth = 0.24;
-    const beamDepth = frameDepth * 0.8;
-    const frameThickness = model.frame.thickness * 1.9;
-    const beamThickness = model.frame.beamThickness * 1.15;
     const boardTilt = -8;
-
     this.root.setLocalEulerAngles(boardTilt, 0, 0);
-    this.fitCamera(model.frame.width + frameThickness * 1.6, model.frame.height + frameThickness * 1.6);
-
-    addMesh(this.root, 'top-frame', this.meshes.frameMember, this.materials.frame, {
-      position: [0, model.frame.topY, 0],
-      scale: [model.frame.width + frameThickness, frameThickness, frameDepth]
-    });
-    addMesh(this.root, 'bottom-frame', this.meshes.frameMember, this.materials.frame, {
-      position: [0, model.frame.bottomY, 0],
-      scale: [model.frame.width + frameThickness, frameThickness, frameDepth]
-    });
-    addMesh(this.root, 'left-frame', this.meshes.frameMember, this.materials.frame, {
-      position: [model.frame.leftX, (model.frame.topY + model.frame.bottomY) / 2, 0],
-      scale: [frameThickness, model.frame.height, frameDepth]
-    });
-    addMesh(this.root, 'right-frame', this.meshes.frameMember, this.materials.frame, {
-      position: [model.frame.rightX, (model.frame.topY + model.frame.bottomY) / 2, 0],
-      scale: [frameThickness, model.frame.height, frameDepth]
-    });
-    addMesh(this.root, 'reckoning-bar', this.meshes.beam, this.materials.frame, {
-      position: [0, model.frame.beamY, 0],
-      scale: [model.frame.width + frameThickness * 0.45, beamThickness, beamDepth]
-    });
-
-    for (const rod of model.rods) {
-      const columnBeads = model.beads.filter((bead) => bead.column === rod.column);
-      const segments = getVisibleRodSegments(
-        columnBeads,
-        model.frame.bottomY - frameThickness * 0.35,
-        model.frame.topY + frameThickness * 0.35,
-        model.frame.beamY,
-        beamThickness,
-        model.config.beadHeight * 1.28 * 0.5
-      );
-
-      for (let index = 0; index < segments.length; index += 1) {
-        const segment = segments[index];
-
-        if (!segment) {
-          continue;
-        }
-
-        const entity = addMesh(this.root, `${rod.id}-segment-${index}`, this.meshes.rod, this.materials.rod, {
-          position: [rod.position.x, segment.centerY, rodCenterZ],
-          scale: [1, 1, segment.length]
-        });
-        entity.setLocalEulerAngles(90, 0, 0);
-      }
-    }
-
-    for (const column of model.columns) {
-      if (!isPlaceColumn(column.index, model.config.columns)) {
-        continue;
-      }
-
-      addMesh(this.root, `place-dot-${column.index}`, this.meshes.placeDot, this.materials.brass, {
-        position: [column.x, model.frame.beamY + 0.006, beamDepth / 2 - placeDotDepth / 2 + 0.003],
-        scale: [1, 1, 1]
-      });
-    }
-
-    for (const bead of model.beads) {
-      const isPlaceBead = bead.section === 'lower' && bead.index === 0 && isPlaceColumn(bead.column, model.config.columns);
-      const material = getBeadMaterial(isPlaceBead, this.materials);
-      const entity = new pc.Entity(bead.id);
-      const meshInstance = new pc.MeshInstance(this.meshes.bead, material);
-      meshInstance.castShadow = false;
-      meshInstance.receiveShadow = true;
-      entity.addComponent('render', {
-        meshInstances: [meshInstance]
-      });
-      entity.setLocalPosition(bead.position.x, bead.position.y, beadCenterZ);
-      entity.setLocalScale(bead.scale.x * 1.35, bead.scale.y * 1.28, bead.scale.z * 1.4);
-      this.root.addChild(entity);
-      this.beadEntities.set(bead.id, { entity, meshInstance, bead, isPlaceBead });
-    }
+    this.renderLayout = addJscadSorobanMeshes(
+      this.root,
+      this.app.graphicsDevice,
+      this.materials,
+      state,
+      this.beadShape,
+      this.cadMeshes,
+      this.beadEntities
+    );
+    this.renderedState = state;
+    this.fitCamera(this.renderLayout.width, this.renderLayout.height);
   }
 
   update(state: SorobanState, animate = false): void {
@@ -221,18 +174,7 @@ export class PlayCanvasSorobanRenderer {
     }
 
     this.stopAnimation();
-    const model = createSorobanModel(state);
-
-    for (const bead of model.beads) {
-      const rendered = this.beadEntities.get(bead.id);
-
-      if (!rendered) {
-        this.rebuild(state);
-        return;
-      }
-
-      setRenderedBeadPosition(rendered, bead.position.y);
-    }
+    this.rebuild(state);
   }
 
   previewBeads(
@@ -242,28 +184,7 @@ export class PlayCanvasSorobanRenderer {
     progress: number
   ): void {
     this.stopAnimation();
-
-    const currentModel = createSorobanModel(currentState);
-    const nextBeads = new Map(createSorobanModel(nextState).beads.map((bead) => [bead.id, bead]));
-    const movingBeads = new Set(beadIds);
-    const clampedProgress = Math.min(1, Math.max(0, progress));
-
-    for (const bead of currentModel.beads) {
-      const rendered = this.beadEntities.get(bead.id);
-
-      if (!rendered) {
-        this.rebuild(currentState);
-        return;
-      }
-
-      const target = nextBeads.get(bead.id);
-      const y =
-        target && movingBeads.has(bead.id)
-          ? bead.position.y + (target.position.y - bead.position.y) * clampedProgress
-          : bead.position.y;
-
-      setRenderedBeadPosition(rendered, y);
-    }
+    this.moveBeadsBetweenStates(currentState, nextState, beadIds, easeOutCubic(progress), true);
   }
 
   setTheme(theme: ThemeName, state: SorobanState): void {
@@ -271,16 +192,21 @@ export class PlayCanvasSorobanRenderer {
     this.rebuild(state);
   }
 
-  setGrabbedBead(beadId: string | null): void {
-    if (this.pointerLight.light) {
-      this.pointerLight.light.intensity = beadId ? 0.95 : 0.36;
+  setBeadShape(shape: BeadShapeStyle, state: SorobanState): void {
+    if (isSameBeadShape(this.beadShape, shape)) {
+      return;
     }
 
-    for (const rendered of this.beadEntities.values()) {
-      rendered.meshInstance.material =
-        beadId === rendered.bead.id
-          ? getGrabbedBeadMaterial(rendered.isPlaceBead, this.materials)
-          : getBeadMaterial(rendered.isPlaceBead, this.materials);
+    this.beadShape = shape;
+    this.rebuild(state);
+  }
+
+  setGrabbedBead(beadId: string | null): void {
+    for (const beadEntity of this.beadEntities.values()) {
+      beadEntity.meshInstance.material =
+        beadEntity.bead.id === beadId
+          ? getGrabbedBeadMaterial(beadEntity.isPlaceBead, this.materials)
+          : getBeadMaterial(beadEntity.isPlaceBead, this.materials);
     }
   }
 
@@ -288,27 +214,38 @@ export class PlayCanvasSorobanRenderer {
     const rect = this.canvas.getBoundingClientRect();
     const x = clientX - rect.left;
     const y = clientY - rect.top;
+    const layout = this.renderLayout;
     let nearest: { bead: BeadModel; distance: number } | null = null;
 
-    for (const rendered of this.beadEntities.values()) {
-      this.camera.camera?.worldToScreen(rendered.entity.getPosition(), this.screenPoint);
+    if (!layout) {
+      return null;
+    }
+
+    for (const bead of this.logicalBeads) {
+      const localPoint = new pc.Vec3(
+        bead.position.x - layout.centerX,
+        bead.position.y - layout.modelBottomY - layout.centerY,
+        beadCenterZ - layout.centerZ
+      );
+      this.root.getWorldTransform().transformPoint(localPoint, this.worldPoint);
+      this.camera.camera?.worldToScreen(this.worldPoint, this.screenPoint);
       const dx = this.screenPoint.x - x;
       const dy = this.screenPoint.y - y;
       const distance = Math.hypot(dx, dy);
 
       if (distance <= 32 && (!nearest || distance < nearest.distance)) {
-        nearest = { bead: rendered.bead, distance };
+        nearest = { bead, distance };
       }
     }
 
     return nearest ? { bead: nearest.bead } : null;
   }
 
-  setPointerLight(clientX: number, clientY: number): void {
-    const rect = this.canvas.getBoundingClientRect();
-    const x = ((clientX - rect.left) / rect.width - 0.5) * 5.2;
-    const y = (0.5 - (clientY - rect.top) / rect.height) * 3.8;
-    this.pointerLight.setLocalPosition(x, y, 2.8);
+  destroy(): void {
+    this.stopAnimation();
+    this.cadMeshes.forEach((mesh) => mesh.destroy());
+    this.cadMeshes = [];
+    this.app.destroy();
   }
 
   private fitCamera(width: number, height: number): void {
@@ -326,47 +263,81 @@ export class PlayCanvasSorobanRenderer {
   private animateToState(state: SorobanState): void {
     this.stopAnimation();
 
-    const model = createSorobanModel(state);
-    const starts = new Map<string, number>();
-    const targets = new Map(model.beads.map((bead) => [bead.id, bead]));
+    if (this.beadEntities.size === 0) {
+      this.rebuild(state);
+      return;
+    }
+
+    const currentState = this.renderedState ?? state;
+    const movingBeadIds = getMovingBeadIdsFromModels(createSorobanModel(currentState).beads, createSorobanModel(state).beads);
+    const starts = new Map<string, Vec3Tuple>();
     const durationMs = 150;
     const startTime = performance.now();
 
-    for (const bead of model.beads) {
-      const rendered = this.beadEntities.get(bead.id);
-
-      if (!rendered) {
-        this.rebuild(state);
-        return;
-      }
-
-      starts.set(bead.id, rendered.entity.getLocalPosition().y);
+    for (const [id, beadEntity] of this.beadEntities) {
+      const position = beadEntity.entity.getLocalPosition();
+      starts.set(id, [position.x, position.y, position.z]);
     }
 
     const tick = (time: number) => {
       const progress = Math.min(1, (time - startTime) / durationMs);
-      const eased = 1 - (1 - progress) ** 3;
+      const eased = easeOutCubic(progress);
 
-      for (const [id, rendered] of this.beadEntities) {
-        const target = targets.get(id);
-        const start = starts.get(id);
-
-        if (!target || start === undefined) {
-          continue;
-        }
-
-        setRenderedBeadPosition(rendered, start + (target.position.y - start) * eased);
-      }
+      this.moveBeadsBetweenStates(currentState, state, movingBeadIds, eased, false, starts);
 
       if (progress < 1) {
         this.animationFrame = window.requestAnimationFrame(tick);
-      } else {
-        this.animationFrame = null;
+        return;
       }
+
+      this.animationFrame = null;
+      this.rebuild(state);
     };
 
     this.animationFrame = window.requestAnimationFrame(tick);
   }
+
+  private moveBeadsBetweenStates(
+    currentState: SorobanState,
+    nextState: SorobanState,
+    beadIds: readonly string[],
+    progress: number,
+    liftMovingBeads: boolean,
+    starts?: ReadonlyMap<string, Vec3Tuple>
+  ): void {
+    if (this.beadEntities.size === 0) {
+      this.rebuild(progress >= 0.5 ? nextState : currentState);
+      return;
+    }
+
+    const currentBeads = createSorobanModel(currentState).beads;
+    const nextBeads = new Map(createSorobanModel(nextState).beads.map((bead) => [bead.id, bead]));
+    const movingBeads = new Set(beadIds);
+    const clampedProgress = Math.min(1, Math.max(0, progress));
+
+    for (const currentBead of currentBeads) {
+      const beadEntity = this.beadEntities.get(currentBead.id);
+      const nextBead = nextBeads.get(currentBead.id);
+
+      if (!beadEntity || !nextBead) {
+        continue;
+      }
+
+      const isMoving = movingBeads.has(currentBead.id);
+      const targetY = isMoving ? nextBead.position.y - currentBead.position.y : 0;
+      const start = starts?.get(currentBead.id);
+      const startY = start ? start[1] : 0;
+      const startZ = start ? start[2] : 0;
+      const y = startY + (targetY - startY) * clampedProgress;
+      const zLift = liftMovingBeads && isMoving
+        ? Math.sin(clampedProgress * Math.PI) * 0.035
+        : 0;
+      const z = startZ + (zLift - startZ) * clampedProgress;
+
+      beadEntity.entity.setLocalPosition(0, y, z);
+    }
+  }
+
 
   private stopAnimation(): void {
     if (this.animationFrame === null) {
@@ -391,8 +362,339 @@ function createMaterials(device: pc.GraphicsDevice, themeName: ThemeName) {
     ebony: material('place-bead', theme.place, theme.placeGloss, 0, placeTexture, [1.6, 1]),
     ebonyGrabbed: material('place-bead-grabbed', theme.place, 0.98, 0, placeTexture, [1.6, 1], 0.1),
     brass: material('brass', new pc.Color(0.82, 0.58, 0.26), 0.58, 0.7),
-    rod: material('rod', new pc.Color(0.57, 0.59, 0.56), 0.38, 0.45)
+    rod: material('rod', new pc.Color(0.58, 0.58, 0.54), 0.26, 0.16)
   };
+}
+
+function addJscadSorobanMeshes(
+  root: pc.Entity,
+  device: pc.GraphicsDevice,
+  materials: ReturnType<typeof createMaterials>,
+  state: SorobanState,
+  beadShape: BeadShapeStyle,
+  meshStore: pc.Mesh[],
+  beadEntities: Map<string, BeadEntity>
+): CadRenderLayout {
+  const geometries = normalizeCadGeometries(loadSorobanCadModule().main(createJscadParams(state, beadShape)));
+  const bounds = geometries.map(getCadBounds);
+  const globalBounds = combineCadBounds(bounds);
+  const model = createSorobanModel(state);
+  const frameThickness = model.frame.thickness * 1.9;
+  const layout = {
+    centerX: (globalBounds.min[0] + globalBounds.max[0]) / 2,
+    centerY: (globalBounds.min[1] + globalBounds.max[1]) / 2,
+    centerZ: (globalBounds.min[2] + globalBounds.max[2]) / 2,
+    modelBottomY: model.frame.bottomY - frameThickness / 2,
+    width: globalBounds.width,
+    height: globalBounds.height
+  };
+  let beadIndex = 0;
+
+  for (let index = 0; index < geometries.length; index += 1) {
+    const geometry = geometries[index];
+    const geometryBounds = bounds[index];
+
+    if (!geometry || !geometryBounds || isViewportAnchorBounds(geometryBounds)) {
+      continue;
+    }
+
+    const materialKind = getCadMaterialKind(geometry);
+    const mesh = createMeshFromJscadGeom3(device, geometry, layout, shouldSmoothCadGeometry(materialKind));
+    const meshInstance = new pc.MeshInstance(mesh, getMaterialForCadGeometry(materialKind, materials));
+    const bead = isBeadMaterialKind(materialKind) ? model.beads[beadIndex] : undefined;
+    const entity = new pc.Entity(bead ? bead.id : `jscad-part-${index}`);
+
+    meshInstance.castShadow = false;
+    meshInstance.receiveShadow = true;
+    entity.addComponent('render', {
+      meshInstances: [meshInstance]
+    });
+    root.addChild(entity);
+    meshStore.push(mesh);
+
+    if (bead) {
+      beadEntities.set(bead.id, {
+        bead,
+        entity,
+        meshInstance,
+        isPlaceBead: materialKind === 'placeBead'
+      });
+      beadIndex += 1;
+    }
+  }
+
+  return layout;
+}
+
+function createJscadParams(state: SorobanState, beadShape: BeadShapeStyle): Record<string, unknown> {
+  return {
+    beadHeight: state.config.beadHeight,
+    columns: state.config.columns,
+    roundness: beadShape.roundness ?? 0.25,
+    shoulderRadius: beadShape.shoulderRadius,
+    smoothness: beadShape.smoothness ?? 8,
+    tipRadius: beadShape.tipRadius,
+    value: state.values.join(''),
+    waistRadius: beadShape.waistRadius
+  };
+}
+
+let sorobanCadModule: CadModule | null = null;
+
+function loadSorobanCadModule(): CadModule {
+  if (sorobanCadModule) {
+    return sorobanCadModule;
+  }
+
+  const module = { exports: {} as Partial<CadModule> };
+  const requireShim = (id: string) => {
+    if (id === '@jscad/modeling') {
+      return jscadModeling;
+    }
+
+    throw new Error(`Unsupported JSCAD dependency: ${id}`);
+  };
+
+  new Function('require', 'module', 'exports', sorobanCadSource)(requireShim, module, module.exports);
+
+  if (typeof module.exports.main !== 'function') {
+    throw new Error('The soroban JSCAD model does not export main(params).');
+  }
+
+  sorobanCadModule = module.exports as CadModule;
+  return sorobanCadModule;
+}
+
+function normalizeCadGeometries(geometry: CadGeometry | readonly CadGeometry[]): readonly CadGeometry[] {
+  return Array.isArray(geometry)
+    ? geometry as readonly CadGeometry[]
+    : [geometry as CadGeometry];
+}
+
+function getCadBounds(geometry: CadGeometry): CadBounds {
+  const min: Vec3Tuple = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+  const max: Vec3Tuple = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+
+  for (const polygon of geometries.geom3.toPolygons(geometry)) {
+    for (const vertex of polygon.vertices) {
+      const point = toPlayCanvasCadPoint(vertex);
+      min[0] = Math.min(min[0], point[0]);
+      min[1] = Math.min(min[1], point[1]);
+      min[2] = Math.min(min[2], point[2]);
+      max[0] = Math.max(max[0], point[0]);
+      max[1] = Math.max(max[1], point[1]);
+      max[2] = Math.max(max[2], point[2]);
+    }
+  }
+
+  return {
+    min,
+    max,
+    width: max[0] - min[0],
+    height: max[1] - min[1],
+    depth: max[2] - min[2]
+  };
+}
+
+function combineCadBounds(bounds: readonly CadBounds[]): CadBounds {
+  const min: Vec3Tuple = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY];
+  const max: Vec3Tuple = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY];
+
+  for (const bound of bounds) {
+    min[0] = Math.min(min[0], bound.min[0]);
+    min[1] = Math.min(min[1], bound.min[1]);
+    min[2] = Math.min(min[2], bound.min[2]);
+    max[0] = Math.max(max[0], bound.max[0]);
+    max[1] = Math.max(max[1], bound.max[1]);
+    max[2] = Math.max(max[2], bound.max[2]);
+  }
+
+  return {
+    min,
+    max,
+    width: max[0] - min[0],
+    height: max[1] - min[1],
+    depth: max[2] - min[2]
+  };
+}
+
+function createMeshFromJscadGeom3(
+  device: pc.GraphicsDevice,
+  geometry: CadGeometry,
+  layout: CadRenderLayout,
+  smoothNormals: boolean
+): pc.Mesh {
+  const positions: number[] = [];
+  const indices: number[] = [];
+  const uvs: number[] = [];
+  const vertexIndexByKey = new Map<string, number>();
+  const polygons = geometries.geom3.toPolygons(geometry);
+
+  for (const polygon of polygons) {
+    const polygonIndices: number[] = [];
+
+    for (const vertex of polygon.vertices) {
+      const point = toPlayCanvasCadPoint(vertex);
+      const x = point[0] - layout.centerX;
+      const y = point[1] - layout.centerY;
+      const z = point[2] - layout.centerZ;
+      const vertexIndex = smoothNormals
+        ? getSharedVertexIndex(vertexIndexByKey, positions, uvs, x, y, z)
+        : addMeshVertex(positions, uvs, x, y, z);
+
+      polygonIndices.push(vertexIndex);
+    }
+
+    for (let index = 1; index < polygon.vertices.length - 1; index += 1) {
+      const first = polygonIndices[0];
+      const second = polygonIndices[index + 1];
+      const third = polygonIndices[index];
+
+      if (first !== undefined && second !== undefined && third !== undefined) {
+        indices.push(first, second, third);
+      }
+    }
+  }
+
+  const mesh = new pc.Mesh(device);
+  mesh.setPositions(positions);
+  mesh.setNormals(pc.calculateNormals(positions, indices));
+  mesh.setUvs(0, uvs);
+  mesh.setIndices(indices);
+  mesh.update();
+  return mesh;
+}
+
+function getSharedVertexIndex(
+  vertexIndexByKey: Map<string, number>,
+  positions: number[],
+  uvs: number[],
+  x: number,
+  y: number,
+  z: number
+): number {
+  const key = `${Math.round(x * 100000)},${Math.round(y * 100000)},${Math.round(z * 100000)}`;
+  const existingIndex = vertexIndexByKey.get(key);
+
+  if (existingIndex !== undefined) {
+    return existingIndex;
+  }
+
+  const vertexIndex = addMeshVertex(positions, uvs, x, y, z);
+  vertexIndexByKey.set(key, vertexIndex);
+  return vertexIndex;
+}
+
+function addMeshVertex(positions: number[], uvs: number[], x: number, y: number, z: number): number {
+  const vertexIndex = positions.length / 3;
+  positions.push(x, y, z);
+  uvs.push(x + z * 0.12, y + z * 0.2);
+  return vertexIndex;
+}
+
+function toPlayCanvasCadPoint(vertex: readonly number[]): Vec3Tuple {
+  return [
+    (vertex[0] ?? 0) / jscadOutputScale,
+    (vertex[2] ?? 0) / jscadOutputScale,
+    (vertex[1] ?? 0) / jscadOutputScale
+  ];
+}
+
+function isViewportAnchorBounds(bounds: CadBounds): boolean {
+  return bounds.width < 0.01 && bounds.height < 0.01 && bounds.depth < 0.01;
+}
+
+function getCadMaterialKind(geometry: CadGeometry): CadMaterialKind {
+  const color = geometry.color;
+
+  if (!color) {
+    return 'frame';
+  }
+
+  const [red, green, blue] = color;
+
+  if (isNearColor([red, green, blue], [0.6, 0.63, 0.64])) {
+    return 'rod';
+  }
+
+  if (isNearColor([red, green, blue], [0.86, 0.64, 0.24])) {
+    return 'brass';
+  }
+
+  if (isNearColor([red, green, blue], [0.72, 0.54, 0.34])) {
+    return 'placeBead';
+  }
+
+  if (isNearColor([red, green, blue], [0.44, 0.3, 0.2])) {
+    return 'bead';
+  }
+
+  return 'frame';
+}
+
+function shouldSmoothCadGeometry(materialKind: CadMaterialKind): boolean {
+  return materialKind !== 'frame';
+}
+
+function isBeadMaterialKind(materialKind: CadMaterialKind): boolean {
+  return materialKind === 'bead' || materialKind === 'placeBead';
+}
+
+function getMaterialForCadGeometry(
+  materialKind: CadMaterialKind,
+  materials: ReturnType<typeof createMaterials>
+): pc.StandardMaterial {
+  const materialByKind = {
+    bead: materials.bead,
+    brass: materials.brass,
+    frame: materials.frame,
+    placeBead: materials.ebony,
+    rod: materials.rod
+  } as const satisfies Record<CadMaterialKind, pc.StandardMaterial>;
+
+  return materialByKind[materialKind];
+}
+
+function getBeadMaterial(isPlaceBead: boolean, materials: ReturnType<typeof createMaterials>): pc.StandardMaterial {
+  return isPlaceBead
+    ? materials.ebony
+    : materials.bead;
+}
+
+function getGrabbedBeadMaterial(isPlaceBead: boolean, materials: ReturnType<typeof createMaterials>): pc.StandardMaterial {
+  return isPlaceBead
+    ? materials.ebonyGrabbed
+    : materials.beadGrabbed;
+}
+
+function getMovingBeadIdsFromModels(
+  currentBeads: readonly BeadModel[],
+  nextBeads: readonly BeadModel[]
+): readonly string[] {
+  const nextById = new Map(nextBeads.map((bead) => [bead.id, bead]));
+
+  return currentBeads
+    .filter((bead) => {
+      const nextBead = nextById.get(bead.id);
+
+      return nextBead ? nextBead.position.y !== bead.position.y : false;
+    })
+    .map((bead) => bead.id);
+}
+
+function easeOutCubic(progress: number): number {
+  const clampedProgress = Math.min(1, Math.max(0, progress));
+
+  return 1 - (1 - clampedProgress) ** 3;
+}
+
+function isNearColor(
+  actual: readonly [number, number, number],
+  expected: readonly [number, number, number]
+): boolean {
+  return Math.abs(actual[0] - expected[0]) < 0.04 &&
+    Math.abs(actual[1] - expected[1]) < 0.04 &&
+    Math.abs(actual[2] - expected[2]) < 0.04;
 }
 
 function material(
@@ -417,30 +719,26 @@ function material(
   return result;
 }
 
-function getBeadMaterial(isPlaceBead: boolean, materials: ReturnType<typeof createMaterials>): pc.StandardMaterial {
-  return isPlaceBead
-    ? materials.ebony
-    : materials.bead;
-}
-
-function getGrabbedBeadMaterial(isPlaceBead: boolean, materials: ReturnType<typeof createMaterials>): pc.StandardMaterial {
-  return isPlaceBead
-    ? materials.ebonyGrabbed
-    : materials.beadGrabbed;
+function isSameBeadShape(left: BeadShapeStyle, right: BeadShapeStyle): boolean {
+  return left.tipRadius === right.tipRadius &&
+    left.shoulderRadius === right.shoulderRadius &&
+    left.waistRadius === right.waistRadius &&
+    (left.roundness ?? 0.25) === (right.roundness ?? 0.25) &&
+    (left.smoothness ?? 8) === (right.smoothness ?? 8);
 }
 
 function getTheme(themeName: ThemeName) {
   const themes = {
     walnut: {
-      frame: new pc.Color(0.28, 0.18, 0.11),
-      bead: new pc.Color(0.31, 0.24, 0.18),
-      place: new pc.Color(0.68, 0.5, 0.31),
+      frame: new pc.Color(0.5, 0.35, 0.23),
+      bead: new pc.Color(0.54, 0.35, 0.22),
+      place: new pc.Color(0.82, 0.6, 0.34),
       frameGloss: 0.34,
-      beadGloss: 0.38,
-      placeGloss: 0.42,
-      frameTexture: ['#3b2416', '#4f3323', '#24140c'],
-      beadTexture: ['#4a392d', '#5a4738', '#2e231c'],
-      placeTexture: ['#a77946', '#d0a06a', '#76502d']
+      beadGloss: 0.36,
+      placeGloss: 0.4,
+      frameTexture: ['#6f5136', '#8a6948', '#3b2618'],
+      beadTexture: ['#6c4a30', '#8a6040', '#3d291c'],
+      placeTexture: ['#b98b51', '#d8aa70', '#815d37']
     },
     ash: {
       frame: new pc.Color(0.48, 0.44, 0.36),
@@ -533,282 +831,10 @@ function toRgba(hex: string, alpha: number): string {
   return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
 }
 
-function createCadMeshes(device: pc.GraphicsDevice) {
-  return {
-    bead: createBiconeMesh(device, defaultBeadShape),
-    beam: createMeshFromGeom3(
-      device,
-      primitives.roundedCuboid({
-        size: [1, 1, 1],
-        roundRadius: 0.08,
-        segments: 8
-      })
-    ),
-    frameMember: createMeshFromGeom3(
-      device,
-      primitives.roundedCuboid({
-        size: [1, 1, 1],
-        roundRadius: 0.12,
-        segments: 10
-      })
-    ),
-    placeDot: createMeshFromGeom3(
-      device,
-      primitives.cylinder({
-        height: placeDotDepth,
-        radius: 0.055,
-        segments: 32
-      })
-    ),
-    rod: createMeshFromGeom3(
-      device,
-      primitives.cylinder({
-        height: 1,
-        radius: 0.018,
-        segments: 28
-      })
-    )
-  };
-}
-
-function createBiconeGeom3(): Geom3 {
-  const radialSegments = 56;
-  const rings = [
-    { y: 0.5, radius: 0.045 },
-    { y: 0.33, radius: 0.33 },
-    { y: 0, radius: 0.5 },
-    { y: -0.33, radius: 0.33 },
-    { y: -0.5, radius: 0.045 }
-  ];
-  const points: Vec3Tuple[] = [];
-  const faces: number[][] = [];
-
-  for (let ringIndex = 0; ringIndex < rings.length; ringIndex += 1) {
-    const ring = rings[ringIndex];
-
-    if (!ring) {
-      continue;
-    }
-
-    for (let segment = 0; segment < radialSegments; segment += 1) {
-      const angle = (segment / radialSegments) * Math.PI * 2;
-      points.push([Math.cos(angle) * ring.radius, ring.y, Math.sin(angle) * ring.radius]);
-    }
-  }
-
-  for (let ringIndex = 0; ringIndex < rings.length - 1; ringIndex += 1) {
-    for (let segment = 0; segment < radialSegments; segment += 1) {
-      const next = (segment + 1) % radialSegments;
-      const a = ringIndex * radialSegments + segment;
-      const b = ringIndex * radialSegments + next;
-      const c = (ringIndex + 1) * radialSegments + segment;
-      const d = (ringIndex + 1) * radialSegments + next;
-      faces.push([a, c, d, b]);
-    }
-  }
-
-  faces.push(Array.from({ length: radialSegments }, (_, index) => radialSegments - 1 - index));
-  faces.push(Array.from({ length: radialSegments }, (_, index) => (rings.length - 1) * radialSegments + index));
-
-  return primitives.polyhedron({
-    faces,
-    orientation: 'outward',
-    points
-  });
-}
-
-function createBiconeMesh(device: pc.GraphicsDevice, beadShape: BeadShape): pc.Mesh {
-  const radialSegments = 72;
-  const rings = [
-    { y: 0.5, radius: beadShape.tipRadius },
-    { y: 0.33, radius: beadShape.shoulderRadius },
-    { y: 0, radius: beadShape.waistRadius },
-    { y: -0.33, radius: beadShape.shoulderRadius },
-    { y: -0.5, radius: beadShape.tipRadius }
-  ];
-  const positions: number[] = [];
-  const normals: number[] = [];
-  const uvs: number[] = [];
-  const indices: number[] = [];
-
-  for (let ringIndex = 0; ringIndex < rings.length; ringIndex += 1) {
-    const ring = rings[ringIndex];
-
-    if (!ring) {
-      continue;
-    }
-
-    const previous = rings[Math.max(0, ringIndex - 1)] ?? ring;
-    const next = rings[Math.min(rings.length - 1, ringIndex + 1)] ?? ring;
-    const slope = previous.y === next.y ? 0 : (next.radius - previous.radius) / (next.y - previous.y);
-
-    for (let segment = 0; segment < radialSegments; segment += 1) {
-      const angle = (segment / radialSegments) * Math.PI * 2;
-      const cos = Math.cos(angle);
-      const sin = Math.sin(angle);
-      const normal = normalize([cos, -slope, sin]);
-
-      positions.push(cos * ring.radius, ring.y, sin * ring.radius);
-      normals.push(...normal);
-      uvs.push(segment / radialSegments, ringIndex / (rings.length - 1));
-    }
-  }
-
-  for (let ringIndex = 0; ringIndex < rings.length - 1; ringIndex += 1) {
-    for (let segment = 0; segment < radialSegments; segment += 1) {
-      const next = (segment + 1) % radialSegments;
-      const a = ringIndex * radialSegments + segment;
-      const b = ringIndex * radialSegments + next;
-      const c = (ringIndex + 1) * radialSegments + segment;
-      const d = (ringIndex + 1) * radialSegments + next;
-
-      indices.push(a, c, d, a, d, b);
-    }
-  }
-
-  const topCenter = positions.length / 3;
-  positions.push(0, rings[0]?.y ?? 0.5, 0);
-  normals.push(0, 1, 0);
-  uvs.push(0.5, 0);
-
-  const bottomCenter = positions.length / 3;
-  positions.push(0, rings[rings.length - 1]?.y ?? -0.5, 0);
-  normals.push(0, -1, 0);
-  uvs.push(0.5, 1);
-
-  for (let segment = 0; segment < radialSegments; segment += 1) {
-    const next = (segment + 1) % radialSegments;
-    const bottomOffset = (rings.length - 1) * radialSegments;
-
-    indices.push(topCenter, next, segment);
-    indices.push(bottomCenter, bottomOffset + segment, bottomOffset + next);
-  }
-
-  const mesh = new pc.Mesh(device);
-  mesh.setPositions(positions);
-  mesh.setNormals(normals);
-  mesh.setUvs(0, uvs);
-  mesh.setIndices(indices);
-  mesh.update();
-  return mesh;
-}
-
-function normalize(vector: Vec3Tuple): Vec3Tuple {
-  const length = Math.hypot(...vector) || 1;
-
-  return [vector[0] / length, vector[1] / length, vector[2] / length];
-}
-
-function setRenderedBeadPosition(rendered: BeadEntity, y: number): void {
-  rendered.entity.setLocalPosition(rendered.bead.position.x, y, beadCenterZ);
-}
-
-function getVisibleRodSegments(
-  beads: readonly BeadModel[],
-  bottomY: number,
-  topY: number,
-  beamY: number,
-  beamThickness: number,
-  beadHalfHeight: number
-): readonly RodSegment[] {
-  const occluders = beads
-    .map((bead) => ({
-      min: bead.position.y - beadHalfHeight * 1.06,
-      max: bead.position.y + beadHalfHeight * 1.06
-    }))
-    .concat({
-      min: beamY - beamThickness * 0.58,
-      max: beamY + beamThickness * 0.58
-    })
-    .sort((a, b) => a.min - b.min);
-  const segments: RodSegment[] = [];
-  let cursor = bottomY;
-
-  for (const occluder of occluders) {
-    const min = Math.max(bottomY, occluder.min);
-    const max = Math.min(topY, occluder.max);
-
-    if (min - cursor > 0.018) {
-      segments.push(toRodSegment(cursor, min));
-    }
-
-    cursor = Math.max(cursor, max);
-  }
-
-  if (topY - cursor > 0.018) {
-    segments.push(toRodSegment(cursor, topY));
-  }
-
-  return segments;
-}
-
-function toRodSegment(fromY: number, toY: number): RodSegment {
-  return {
-    centerY: (fromY + toY) / 2,
-    length: toY - fromY
-  };
-}
-
-function createMeshFromGeom3(device: pc.GraphicsDevice, geometry: Geom3): pc.Mesh {
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const uvs: number[] = [];
-  const polygons = geometries.geom3.toPolygons(geometry);
-
-  for (const polygon of polygons) {
-    const start = positions.length / 3;
-
-    for (const vertex of polygon.vertices) {
-      positions.push(vertex[0], vertex[1], vertex[2]);
-      uvs.push(vertex[0] + vertex[1] * 0.12, vertex[2] + vertex[1] * 0.2);
-    }
-
-    for (let index = 1; index < polygon.vertices.length - 1; index += 1) {
-      indices.push(start, start + index, start + index + 1);
-    }
-  }
-
-  const mesh = new pc.Mesh(device);
-  mesh.setPositions(positions);
-  mesh.setNormals(pc.calculateNormals(positions, indices));
-  mesh.setUvs(0, uvs);
-  mesh.setIndices(indices);
-  mesh.update();
-  return mesh;
-}
-
-function addMesh(
-  parent: pc.Entity,
-  name: string,
-  mesh: pc.Mesh,
-  material: pc.Material,
-  options: Readonly<{ position: Vec3Tuple; scale: Vec3Tuple }>
-): pc.Entity {
-  const entity = new pc.Entity(name);
-  const meshInstance = new pc.MeshInstance(mesh, material);
-  meshInstance.castShadow = false;
-  meshInstance.receiveShadow = true;
-  entity.addComponent('render', {
-    meshInstances: [meshInstance]
-  });
-  entity.setLocalPosition(...options.position);
-  entity.setLocalScale(...options.scale);
-  parent.addChild(entity);
-  return entity;
-}
-
-function isPlaceColumn(column: number, columns: number): boolean {
-  return (columns - column) % 3 === 0;
-}
-
-function getCanvasWidth(columns: number): number {
-  return columns * columnPixelWidth + 120;
-}
-
-function getDisplayCanvasWidth(modelCanvasWidth: number): number {
+function getDisplayCanvasWidth(): number {
   if (typeof window === 'undefined') {
-    return modelCanvasWidth;
+    return 1280 - horizontalPagePadding;
   }
 
-  return Math.min(modelCanvasWidth, Math.max(320, window.innerWidth - horizontalPagePadding));
+  return Math.max(320, window.innerWidth - horizontalPagePadding);
 }
