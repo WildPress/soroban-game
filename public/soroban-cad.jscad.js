@@ -1,4 +1,5 @@
 const { colorize } = require('@jscad/modeling').colors;
+const { subtract } = require('@jscad/modeling').booleans;
 const { cuboid, cylinder, polyhedron } = require('@jscad/modeling').primitives;
 const { rotateX, scale, translate } = require('@jscad/modeling').transforms;
 
@@ -19,6 +20,7 @@ const defaultConfig = {
   frameThickness: 0.14,
   beamThickness: 0.18
 };
+const beadHoleRadius = 0.028;
 
 function getParameterDefinitions() {
   return [
@@ -28,7 +30,6 @@ function getParameterDefinitions() {
     { name: 'shoulderRadius', type: 'slider', initial: 0.33, min: 0.22, max: 0.48, step: 0.005, caption: 'Shoulder radius' },
     { name: 'waistRadius', type: 'slider', initial: 0.5, min: 0.36, max: 0.6, step: 0.005, caption: 'Waist radius' },
     { name: 'beadHeight', type: 'slider', initial: 0.4, min: 0.28, max: 0.56, step: 0.01, caption: 'Bead height' },
-    { name: 'beadDepth', type: 'slider', initial: 1, min: 0.5, max: 1.4, step: 0.025, caption: 'Bead depth' },
     { name: 'roundness', type: 'slider', initial: 0.25, min: 0, max: 1, step: 0.025, caption: 'Roundness' },
     { name: 'smoothness', type: 'slider', initial: 8, min: 1, max: 16, step: 1, caption: 'Smoothness' }
   ];
@@ -45,7 +46,6 @@ function main(params) {
   const beamThickness = model.frame.beamThickness * 1.15;
   const beadCenterZ = 0;
   const rodCenterZ = beadCenterZ;
-  const beadHalfHeight = config.beadHeight * 1.28 * 0.5;
   const placeDotDepth = beamDepth + 0.012;
   const outputScale = 18;
   const modelBottomY = model.frame.bottomY - frameThickness / 2;
@@ -53,31 +53,35 @@ function main(params) {
     tipRadius: clampNumber(params.tipRadius, 0.01, 0.18, 0.045),
     shoulderRadius: clampNumber(params.shoulderRadius, 0.22, 0.48, 0.33),
     waistRadius: clampNumber(params.waistRadius, 0.36, 0.6, 0.5),
-    depthScale: clampNumber(params.beadDepth, 0.5, 1.4, 1),
+    depthScale: 1,
     roundness: clampNumber(params.roundness, 0, 1, 0.25),
     smoothness: clampInt(params.smoothness, 1, 16)
   };
   const parts = [];
+  const frameCenterX = (model.frame.leftX + model.frame.rightX) / 2;
+  const viewportFrame = createViewportFrame(config);
+  const viewportAnchors = createViewportAnchors(viewportFrame);
 
   parts.push(
-    uprightPart(cuboid({ size: [1, 1, 1] }), [0.55, 0.43, 0.3, 1], [0, 0, model.frame.topY - modelBottomY], [model.frame.width + frameThickness, frameDepth, frameThickness], outputScale),
-    uprightPart(cuboid({ size: [1, 1, 1] }), [0.55, 0.43, 0.3, 1], [0, 0, model.frame.bottomY - modelBottomY], [model.frame.width + frameThickness, frameDepth, frameThickness], outputScale),
+    ...viewportAnchors.map((anchor) =>
+      uprightPart(cuboid({ size: [1, 1, 1] }), [1, 1, 1, 1], [anchor.x, 0, anchor.y - modelBottomY], [0.001, 0.001, 0.001], outputScale)
+    ),
+    uprightPart(cuboid({ size: [1, 1, 1] }), [0.55, 0.43, 0.3, 1], [frameCenterX, 0, model.frame.topY - modelBottomY], [model.frame.width + frameThickness, frameDepth, frameThickness], outputScale),
+    uprightPart(cuboid({ size: [1, 1, 1] }), [0.55, 0.43, 0.3, 1], [frameCenterX, 0, model.frame.bottomY - modelBottomY], [model.frame.width + frameThickness, frameDepth, frameThickness], outputScale),
     uprightPart(cuboid({ size: [1, 1, 1] }), [0.55, 0.43, 0.3, 1], [model.frame.leftX, 0, (model.frame.topY + model.frame.bottomY) / 2 - modelBottomY], [frameThickness, frameDepth, model.frame.height], outputScale),
     uprightPart(cuboid({ size: [1, 1, 1] }), [0.55, 0.43, 0.3, 1], [model.frame.rightX, 0, (model.frame.topY + model.frame.bottomY) / 2 - modelBottomY], [frameThickness, frameDepth, model.frame.height], outputScale),
-    uprightPart(cuboid({ size: [1, 1, 1] }), [0.5, 0.35, 0.24, 1], [0, 0, model.frame.beamY - modelBottomY], [model.frame.width + frameThickness * 0.45, beamDepth, beamThickness], outputScale)
+    uprightPart(cuboid({ size: [1, 1, 1] }), [0.5, 0.35, 0.24, 1], [frameCenterX, 0, model.frame.beamY - modelBottomY], [model.frame.width + frameThickness * 0.45, beamDepth, beamThickness], outputScale)
   );
 
   for (const column of model.columns) {
     const rodStartY = model.frame.bottomY - frameThickness / 2;
     const rodEndY = model.frame.topY + frameThickness / 2;
     const rodSegments = getVisibleRodSegments(
-      model.beads.filter((bead) => bead.column === column.index),
       rodStartY,
       rodEndY,
       model.frame,
       frameThickness,
-      beamThickness,
-      beadHalfHeight
+      beamThickness
     );
 
     for (const segment of rodSegments) {
@@ -140,6 +144,33 @@ function createConfig(params, beadHeight) {
     frameTopY: upperActiveY + inactiveGap + beadHeight * 1.25,
     frameBottomY: lowerActiveStartY - beadStep * 3 - inactiveGap - beadHeight * 1.25
   };
+}
+
+function createViewportFrame(config) {
+  const maxConfig = {
+    ...config,
+    columns: 21
+  };
+  const model = createModel(maxConfig, Array.from({ length: maxConfig.columns }, () => 0));
+
+  return {
+    centerX: (model.frame.leftX + model.frame.rightX) / 2,
+    width: model.frame.width + model.frame.thickness * 3,
+    topY: model.frame.topY + model.frame.thickness * 2,
+    bottomY: model.frame.bottomY - model.frame.thickness * 2,
+    height: model.frame.height + model.frame.thickness * 4
+  };
+}
+
+function createViewportAnchors(viewportFrame) {
+  const halfWidth = viewportFrame.width / 2;
+
+  return [
+    { x: viewportFrame.centerX - halfWidth, y: viewportFrame.topY },
+    { x: viewportFrame.centerX - halfWidth, y: viewportFrame.bottomY },
+    { x: viewportFrame.centerX + halfWidth, y: viewportFrame.topY },
+    { x: viewportFrame.centerX + halfWidth, y: viewportFrame.bottomY }
+  ];
 }
 
 function uprightPart(shape, color, position, partScale, outputScale) {
@@ -269,7 +300,10 @@ function createBicone(beadShape) {
     faces.push([bottomPoint, bottomRingStart + next, bottomRingStart + segment]);
   }
 
-  return polyhedron({ points, faces, orientation: 'outward' });
+  return subtract(
+    polyhedron({ points, faces, orientation: 'outward' }),
+    cylinder({ height: 1.2, radius: beadHoleRadius, segments: 40 })
+  );
 }
 
 function mix(from, to, amount) {
@@ -289,24 +323,20 @@ function getColumnX(column, config) {
 }
 
 function normalizeValues(value, columns) {
-  const digits = String(value || '').replace(/\D/g, '').slice(0, columns).split('').map(Number);
+  const digits = String(value || '').replace(/\D/g, '').slice(-columns).split('').map(Number);
 
   while (digits.length < columns) {
-    digits.push(0);
+    digits.unshift(0);
   }
 
   return digits.map((digit) => Math.min(9, Math.max(0, digit)));
 }
 
-function getVisibleRodSegments(beads, rodStartY, rodEndY, frame, frameThickness, beamThickness, beadHalfHeight) {
+function getVisibleRodSegments(rodStartY, rodEndY, frame, frameThickness, beamThickness) {
   const hiddenIntervals = [
     { min: frame.bottomY - frameThickness / 2, max: frame.bottomY + frameThickness / 2 },
     { min: frame.beamY - beamThickness / 2, max: frame.beamY + beamThickness / 2 },
-    { min: frame.topY - frameThickness / 2, max: frame.topY + frameThickness / 2 },
-    ...beads.map((bead) => ({
-      min: bead.position.y - beadHalfHeight * 1.06,
-      max: bead.position.y + beadHalfHeight * 1.06
-    }))
+    { min: frame.topY - frameThickness / 2, max: frame.topY + frameThickness / 2 }
   ].sort((a, b) => a.min - b.min);
 
   const segments = [];
