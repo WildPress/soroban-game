@@ -93,6 +93,7 @@ export function App() {
   const [theme, setTheme] = useState<ThemeName>('walnut');
   const [styleName, setStyleNameState] = useState<StyleName>(() => getSavedStyleName());
   const [customStyle, setCustomStyleState] = useState<BeadShapeStyle>(() => getSavedCustomStyle());
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeBeadShape = styleName === 'custom' ? customStyle : stylePresets[styleName].beadShape;
   const sorobanValue = getTotalValue(state);
@@ -186,77 +187,28 @@ export function App() {
 
   return (
     <main className="app-shell" aria-label="Soroban prototype">
-      <section className="status-strip">
-        <div>
-          <span className="label">Columns</span>
-          <input
-            id="columns"
-            type="number"
-            min="1"
-            max={sorobanColumns}
-            value={state.config.columns}
-            onChange={(event) => {
-              const columns = clampNumber(Number(event.currentTarget.value), [1, sorobanColumns], sorobanColumns);
-
-              setState((currentState) => createSorobanState({
-                columns,
-                values: currentState.values
-              }));
-            }}
-          />
-        </div>
-        <div>
-          <span className="label">Theme</span>
-          <select
-            id="theme"
-            value={theme}
-            onChange={(event) => {
-              setTheme(event.currentTarget.value as ThemeName);
-            }}
-          >
-            {themeOptions.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <span className="label">Style</span>
-          <div className="inline-control">
-            <select
-              id="style"
-              value={styleName}
-              onChange={(event) => {
-                setStyleName(toStyleName(event.currentTarget.value));
-              }}
-            >
-              {Object.entries(stylePresets).map(([name, preset]) => (
-                <option key={name} value={name}>{preset.label}</option>
-              ))}
-            </select>
-            <button
-              id="randomize-style"
-              className="icon-button"
-              type="button"
-              aria-label="Random style"
-              onClick={() => {
-                setCustomStyle(createRandomBeadShape());
-                setStyleName('custom');
-              }}
-            >
-              Rnd
-            </button>
-          </div>
-        </div>
-      </section>
+      <button
+        id="settings-toggle"
+        className="settings-toggle"
+        type="button"
+        aria-controls="settings-panel"
+        aria-expanded={settingsOpen}
+        onClick={() => {
+          setSettingsOpen((open) => !open);
+        }}
+      >
+        Settings
+      </button>
 
       <section className="number-board-panel" aria-label="Number board">
         <div className="number-board-header">
-          <div>
+          <div className="sr-only">
             <span className="label">Target</span>
             <strong id="board-target">{sorobanValue}</strong>
           </div>
           <button
             id="board-go"
+            className={!canCommitBoardSelection ? 'is-hidden-action' : ''}
             type="button"
             disabled={!canCommitBoardSelection}
             onClick={commitBoardSelection}
@@ -301,13 +253,83 @@ export function App() {
         onInteractionStart={ensureAudioContext}
       />
 
-      <section className="control-panel">
+      <section id="settings-panel" className="settings-panel" hidden={!settingsOpen}>
         <header>
-          <h1>Soroban Prototype</h1>
+          <h1>Settings</h1>
+          <button
+            id="settings-close"
+            type="button"
+            onClick={() => {
+              setSettingsOpen(false);
+            }}
+          >
+            Close
+          </button>
+        </header>
+        <div className="settings-grid">
+          <div>
+            <span className="label">Columns</span>
+            <input
+              id="columns"
+              type="number"
+              min="1"
+              max={sorobanColumns}
+              value={state.config.columns}
+              onChange={(event) => {
+                const columns = clampNumber(Number(event.currentTarget.value), [1, sorobanColumns], sorobanColumns);
+
+                setState((currentState) => createSorobanState({
+                  columns,
+                  values: currentState.values
+                }));
+              }}
+            />
+          </div>
+          <div>
+            <span className="label">Theme</span>
+            <select
+              id="theme"
+              value={theme}
+              onChange={(event) => {
+                setTheme(event.currentTarget.value as ThemeName);
+              }}
+            >
+              {themeOptions.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <span className="label">Style</span>
+            <div className="inline-control">
+              <select
+                id="style"
+                value={styleName}
+                onChange={(event) => {
+                  setStyleName(toStyleName(event.currentTarget.value));
+                }}
+              >
+                {Object.entries(stylePresets).map(([name, preset]) => (
+                  <option key={name} value={name}>{preset.label}</option>
+                ))}
+              </select>
+              <button
+                id="randomize-style"
+                className="icon-button"
+                type="button"
+                aria-label="Random style"
+                onClick={() => {
+                  setCustomStyle(createRandomBeadShape());
+                  setStyleName('custom');
+                }}
+              >
+                Rnd
+              </button>
+            </div>
+          </div>
+        </div>
+        <div className="settings-actions">
           <div className="actions">
-            <a className="button-link" href="http://127.0.0.1:5120/#./soroban-cad.jscad.js" target="_blank" rel="noreferrer">
-              CAD Debug
-            </a>
             <button
               id="randomize"
               type="button"
@@ -332,7 +354,7 @@ export function App() {
               Reset
             </button>
           </div>
-        </header>
+        </div>
         <div id="column-controls" className="column-controls" aria-label="Column values">
           {state.values.map((value, index) => (
             <span key={`${state.config.columns}-${index}`} className="column-value" aria-label={`Column ${index + 1} value ${value}`}>

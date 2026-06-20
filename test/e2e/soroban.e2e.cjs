@@ -28,13 +28,18 @@ async function testAppValueDisplay(browser) {
   const failures = collectFailures(page);
 
   await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
-  await page.waitForSelector('#column-controls .column-value');
+  await page.waitForSelector('#number-board .number-cell');
   await page.waitForTimeout(1000);
 
-  assert.equal(await page.locator('#columns').getAttribute('max'), '3');
-  await expectColumnValues(page, Array.from({ length: 3 }, () => '0'));
+  assert.equal(await page.locator('#settings-panel').isHidden(), true);
+  assert.equal(await page.getByText('CAD Debug').count(), 0);
   await expectNumberBoardReady(page);
   await expectAppFitsViewport(page);
+
+  await page.locator('#settings-toggle').click();
+  await page.waitForSelector('#column-controls .column-value');
+  assert.equal(await page.locator('#columns').getAttribute('max'), '3');
+  await expectColumnValues(page, Array.from({ length: 3 }, () => '0'));
 
   await page.locator('#columns').fill('2');
   await page.locator('#columns').dispatchEvent('change');

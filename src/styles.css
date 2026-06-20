@@ -42,14 +42,40 @@ select {
 }
 
 .app-shell {
+  position: relative;
   display: grid;
   height: 100svh;
   min-height: 0;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   gap: clamp(6px, 1.2svh, 14px);
   padding: clamp(8px, 1.5svh, 18px);
   overflow: hidden;
   perspective: 1200px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.settings-toggle {
+  position: fixed;
+  bottom: 10px;
+  right: 10px;
+  z-index: 20;
+  min-height: 34px;
+  padding: 0 12px;
+  background: rgba(216, 178, 95, 0.92);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.32);
+}
+
+.is-hidden-action {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .status-strip {
@@ -127,6 +153,7 @@ select {
 }
 
 .number-board-panel {
+  position: relative;
   display: grid;
   width: min(100%, 300px);
   justify-self: center;
@@ -139,9 +166,13 @@ select {
 }
 
 .number-board-header {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 3;
   display: flex;
   align-items: end;
-  justify-content: space-between;
+  justify-content: end;
   gap: 12px;
 }
 
@@ -523,13 +554,24 @@ select {
   background-blend-mode: screen, overlay, multiply, luminosity, normal;
 }
 
-.control-panel {
+.settings-panel {
+  position: fixed;
+  right: 10px;
+  bottom: 10px;
+  left: 10px;
+  z-index: 30;
   width: min(520px, 100%);
-  justify-self: center;
+  max-height: calc(100svh - 20px);
+  margin: 0 auto;
+  overflow: auto;
   padding: 10px;
+  border: 1px solid rgba(238, 243, 248, 0.16);
+  border-radius: 8px;
+  background: rgba(8, 10, 12, 0.94);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.52);
 }
 
-.control-panel header {
+.settings-panel header {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -537,11 +579,21 @@ select {
   margin-bottom: 8px;
 }
 
-.control-panel h1 {
+.settings-panel h1 {
   margin: 0;
   font-size: clamp(1.12rem, 4vw, 1.45rem);
   line-height: 1.15;
   letter-spacing: 0;
+}
+
+.settings-grid {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.settings-actions {
+  margin-bottom: 8px;
 }
 
 .actions {
@@ -595,7 +647,7 @@ button:disabled {
 
 @media (max-width: 640px) {
   .app-shell {
-    grid-template-rows: auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .status-strip {
@@ -622,16 +674,12 @@ button:disabled {
     transform: rotateX(8deg);
   }
 
-  .control-panel header {
+  .settings-panel header {
     display: block;
   }
 
-  .control-panel h1 {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
+  .settings-panel h1 {
+    margin-bottom: 8px;
   }
 
   .actions {
