@@ -58,6 +58,7 @@ const maxCanvasHeight = 780;
 const gameCanvasVerticalPadding = 24;
 const numberBubbleSpacing = 0.96;
 const numberBubbleDiameter = 0.78;
+const numberBubbleDepth = 0.22;
 const numberBoardGap = 0.54;
 const beadCenterZ = 0;
 const jscadOutputScale = 18;
@@ -322,7 +323,7 @@ export class PlayCanvasSorobanRenderer {
         material
       });
       entity.setLocalPosition(x, y, highlighted ? 0.16 : 0.08);
-      entity.setLocalScale(scale, scale, 0.22);
+      entity.setLocalScale(scale, scale, numberBubbleDepth);
 
       if (!removed) {
         const label = new pc.Entity(`${cell.id}-label`, this.app);
@@ -334,8 +335,8 @@ export class PlayCanvasSorobanRenderer {
         label.addComponent('render', {
           meshInstances: [labelMeshInstance]
         });
-        label.setLocalPosition(x, y, 0.4);
-        label.setLocalScale(0.46, 0.46, 1);
+        label.setLocalPosition(x, y, highlighted ? 0.16 : 0.08);
+        label.setLocalScale(scale, scale, numberBubbleDepth);
       }
     }
   }
@@ -491,26 +492,48 @@ function numberBoardMaterial(name: string, diffuse: pc.Color, emissive: pc.Color
 
 function createNumberLabelMesh(device: pc.GraphicsDevice): pc.Mesh {
   const geometry = new pc.Geometry();
+  const positions: number[] = [];
+  const normals: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+  const sphereRadius = 0.5;
+  const surfaceLift = 0.018;
+  const halfWidth = 0.36;
+  const halfHeight = 0.29;
+  const columns = 18;
+  const rows = 14;
 
-  geometry.positions = [
-    -0.5, -0.5, 0,
-    0.5, -0.5, 0,
-    0.5, 0.5, 0,
-    -0.5, 0.5, 0
-  ];
-  geometry.normals = [
-    0, 0, 1,
-    0, 0, 1,
-    0, 0, 1,
-    0, 0, 1
-  ];
-  geometry.uvs = [
-    0, 1,
-    1, 1,
-    1, 0,
-    0, 0
-  ];
-  geometry.indices = [0, 1, 2, 0, 2, 3];
+  for (let row = 0; row <= rows; row += 1) {
+    const v = row / rows;
+    const y = (v - 0.5) * halfHeight * 2;
+
+    for (let column = 0; column <= columns; column += 1) {
+      const u = column / columns;
+      const x = (u - 0.5) * halfWidth * 2;
+      const z = Math.sqrt(Math.max(0, sphereRadius * sphereRadius - x * x - y * y)) + surfaceLift;
+      const normal = new pc.Vec3(x, y, z).normalize();
+
+      positions.push(x, y, z);
+      normals.push(normal.x, normal.y, normal.z);
+      uvs.push(u, 1 - v);
+    }
+  }
+
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const bottomLeft = row * (columns + 1) + column;
+      const bottomRight = bottomLeft + 1;
+      const topLeft = bottomLeft + columns + 1;
+      const topRight = topLeft + 1;
+
+      indices.push(bottomLeft, bottomRight, topRight, bottomLeft, topRight, topLeft);
+    }
+  }
+
+  geometry.positions = positions;
+  geometry.normals = normals;
+  geometry.uvs = uvs;
+  geometry.indices = indices;
 
   return pc.Mesh.fromGeometry(device, geometry);
 }
@@ -547,18 +570,38 @@ function createNumberLabelTexture(device: pc.GraphicsDevice, text: string, highl
   }
 
   context.clearRect(0, 0, size, size);
-  context.font = '800 92px Inter, system-ui, sans-serif';
+  context.save();
+  context.translate(size / 2, size / 2);
+  context.beginPath();
+  context.arc(0, 0, 90, 0, Math.PI * 2);
+  context.fillStyle = highlighted ? '#ffe2a3' : '#f7f2e8';
+  context.shadowColor = 'rgba(0, 0, 0, 0.35)';
+  context.shadowBlur = 12;
+  context.shadowOffsetY = 5;
+  context.fill();
+  context.shadowColor = 'transparent';
+  context.lineWidth = 9;
+  context.strokeStyle = highlighted ? 'rgba(120, 60, 10, 0.34)' : 'rgba(30, 38, 44, 0.22)';
+  context.stroke();
+  context.beginPath();
+  context.arc(0, 0, 73, 0, Math.PI * 2);
+  context.lineWidth = 2;
+  context.strokeStyle = highlighted ? 'rgba(120, 60, 10, 0.24)' : 'rgba(30, 38, 44, 0.16)';
+  context.stroke();
+  context.restore();
+
+  context.font = `850 ${text.length > 1 ? 88 : 106}px Inter, system-ui, sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.lineJoin = 'round';
-  context.shadowColor = highlighted ? 'rgba(255, 231, 170, 0.58)' : 'rgba(0, 0, 0, 0.78)';
-  context.shadowBlur = highlighted ? 10 : 12;
-  context.shadowOffsetY = 5;
-  context.lineWidth = highlighted ? 10 : 8;
-  context.strokeStyle = highlighted ? 'rgba(255, 222, 140, 0.52)' : 'rgba(4, 8, 10, 0.72)';
-  context.fillStyle = highlighted ? '#160d05' : '#f4fbff';
-  context.strokeText(text, size / 2, size / 2 + 4);
-  context.fillText(text, size / 2, size / 2 + 4);
+  context.shadowColor = 'rgba(255, 255, 255, 0.35)';
+  context.shadowBlur = 3;
+  context.shadowOffsetY = 1;
+  context.lineWidth = 5;
+  context.strokeStyle = highlighted ? 'rgba(255, 235, 178, 0.34)' : 'rgba(255, 255, 255, 0.55)';
+  context.fillStyle = highlighted ? '#1a1207' : '#23313a';
+  context.strokeText(text, size / 2, size / 2 + 5);
+  context.fillText(text, size / 2, size / 2 + 5);
 
   const texture = new pc.Texture(device, {
     width: size,
