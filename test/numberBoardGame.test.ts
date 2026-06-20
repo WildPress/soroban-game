@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  calculateChainScore,
   commitNumberBoardSelection,
   createNumberBoard,
   createSeededNumberBoardValues,
@@ -8,6 +9,24 @@ import {
   getHighlightedCells,
   previewNumberBoardValue
 } from '../src/numberBoardGame.js';
+
+test('scores a chain using the chain length as the multiplier', () => {
+  assert.deepEqual(calculateChainScore(0), {
+    chainLength: 0,
+    multiplier: 0,
+    points: 0
+  });
+  assert.deepEqual(calculateChainScore(1), {
+    chainLength: 1,
+    multiplier: 1,
+    points: 1
+  });
+  assert.deepEqual(calculateChainScore(4), {
+    chainLength: 4,
+    multiplier: 4,
+    points: 16
+  });
+});
 
 test('creates a 10 by 10 board from numbered cells', () => {
   const board = createNumberBoard(Array.from({ length: 100 }, (_, index) => index + 1));

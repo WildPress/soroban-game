@@ -30,6 +30,12 @@ export type NumberBoardCommit = Readonly<{
   success: boolean;
 }>;
 
+export type ChainScore = Readonly<{
+  chainLength: number;
+  multiplier: number;
+  points: number;
+}>;
+
 export type NumberBoardOptions = Readonly<{
   width?: number;
   height?: number;
@@ -227,6 +233,19 @@ export function commitNumberBoardSelection(state: NumberBoardState): NumberBoard
 
 export function getHighlightedCells(state: NumberBoardState): readonly NumberBoardCell[] {
   return getCellsById(state.cells, state.highlightedCellIds);
+}
+
+export function calculateChainScore(chainLength: number): ChainScore {
+  const normalizedChainLength = Number.isInteger(chainLength) && chainLength > 0
+    ? chainLength
+    : 0;
+  const multiplier = normalizedChainLength;
+
+  return {
+    chainLength: normalizedChainLength,
+    multiplier,
+    points: normalizedChainLength * multiplier
+  };
 }
 
 function toPreview(

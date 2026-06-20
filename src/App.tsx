@@ -3,6 +3,7 @@ import { createSorobanState, getTotalValue, type SorobanState } from './soroban.
 import { PlayCanvasBoard } from './PlayCanvasBoard.js';
 import type { BeadShapeStyle, ThemeName } from './playcanvasSoroban.js';
 import {
+  calculateChainScore,
   commitNumberBoardSelection,
   createNumberBoard,
   createSeededNumberBoardValues,
@@ -93,10 +94,14 @@ export function App() {
   const [styleName, setStyleNameState] = useState<StyleName>(() => getSavedStyleName());
   const [customStyle, setCustomStyleState] = useState<BeadShapeStyle>(() => getSavedCustomStyle());
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [instructionsOpen, setInstructionsOpen] = useState(true);
+  const [score, setScore] = useState(0);
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeBeadShape = styleName === 'custom' ? customStyle : stylePresets[styleName].beadShape;
   const sorobanValue = getTotalValue(state);
   const highlightedBoardValue = getHighlightedCells(numberBoard).reduce((sum, cell) => sum + cell.value, 0);
+  const chainLength = numberBoard.highlightedCellIds.length;
+  const chainScore = calculateChainScore(chainLength);
   const canCommitBoardSelection = numberBoard.highlightedCellIds.length > 0 && highlightedBoardValue === numberBoard.targetValue;
 
   const ensureAudioContext = useCallback(() => {
@@ -185,6 +190,7 @@ export function App() {
       const commit = commitNumberBoardSelection(currentBoard);
 
       if (commit.success) {
+        setScore((currentScore) => currentScore + calculateChainScore(commit.removedCellIds.length).points);
         setState((currentState) => createSorobanState({ columns: currentState.config.columns }));
       }
 
@@ -194,6 +200,17 @@ export function App() {
 
   return (
     <main className="app-shell" aria-label="Soroban prototype">
+      <section className="score-hud" aria-label="Score">
+        <div>
+          <span className="label">Score</span>
+          <strong id="score-value">{score}</strong>
+        </div>
+        <div>
+          <span className="label">Chain</span>
+          <strong id="chain-multiplier">x{Math.max(1, chainScore.multiplier)}</strong>
+        </div>
+      </section>
+
       <button
         id="settings-toggle"
         className="settings-toggle"
@@ -261,6 +278,25 @@ export function App() {
           </div>
         </section>
       </section>
+
+      {instructionsOpen ? (
+        <section className="instructions-backdrop" aria-label="Instructions">
+          <div className="instructions-popover" role="dialog" aria-modal="true" aria-labelledby="instructions-title">
+            <h1 id="instructions-title">Make a Chain</h1>
+            <p>Use the soroban to make a number on a ball. Keep adding to extend the highlighted chain, then press Go to clear it.</p>
+            <p>Longer chains score more: each ball adds +1 to the multiplier.</p>
+            <button
+              id="instructions-start"
+              type="button"
+              onClick={() => {
+                setInstructionsOpen(false);
+              }}
+            >
+              Start
+            </button>
+          </div>
+        </section>
+      ) : null}
 
       <section id="settings-panel" className="settings-panel" hidden={!settingsOpen}>
         <header>

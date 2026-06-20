@@ -28,6 +28,13 @@ async function testAppValueDisplay(browser) {
   const failures = collectFailures(page);
 
   await page.goto(appUrl, { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('#instructions-start');
+  assert.equal(await page.locator('#instructions-title').innerText(), 'Make a Chain');
+  assert.match(await page.locator('.instructions-popover').innerText(), /Longer chains score more/);
+  assert.equal(await page.locator('#score-value').innerText(), '0');
+  assert.equal(await page.locator('#chain-multiplier').innerText(), 'x1');
+  await page.locator('#instructions-start').click();
+  await page.waitForSelector('.instructions-backdrop', { state: 'detached' });
   await page.waitForSelector('#number-board .number-cell');
   await page.waitForTimeout(1000);
 
