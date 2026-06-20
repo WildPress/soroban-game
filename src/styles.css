@@ -214,12 +214,12 @@ select {
   place-items: center;
   border: 1px solid transparent;
   border-radius: 50%;
-  color: #eef3f8;
+  color: transparent;
   background: transparent;
   font-size: clamp(0.9rem, 4vw, 1.2rem);
   font-weight: 800;
   line-height: 1;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.88);
+  text-shadow: none;
   pointer-events: none;
   transition:
     opacity 140ms ease,
@@ -230,9 +230,9 @@ select {
 
 .number-cell.is-highlighted {
   border-color: transparent;
-  color: #160d05;
+  color: transparent;
   background: transparent;
-  text-shadow: 0 1px 8px rgba(255, 225, 154, 0.54);
+  text-shadow: none;
   transform: translateY(-2px) scale(1.06);
 }
 

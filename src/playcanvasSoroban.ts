@@ -77,6 +77,7 @@ export class PlayCanvasSorobanRenderer {
   private readonly numberBoardRoot: pc.Entity;
   private materials: ReturnType<typeof createMaterials>;
   private readonly numberBoardMaterials: ReturnType<typeof createNumberBoardMaterials>;
+  private readonly numberLabelMaterials = new Map<string, pc.StandardMaterial>();
   private beadShape: BeadShapeStyle = defaultBeadShape;
   private readonly screenPoint = new pc.Vec3();
   private readonly worldPoint = new pc.Vec3();
@@ -268,6 +269,11 @@ export class PlayCanvasSorobanRenderer {
     this.stopAnimation();
     this.cadMeshes.forEach((mesh) => mesh.destroy());
     this.cadMeshes = [];
+    this.numberLabelMaterials.forEach((material) => {
+      material.diffuseMap?.destroy();
+      material.destroy();
+    });
+    this.numberLabelMaterials.clear();
     this.app.destroy();
   }
 
@@ -317,7 +323,34 @@ export class PlayCanvasSorobanRenderer {
       });
       entity.setLocalPosition(x, y, highlighted ? 0.16 : 0.08);
       entity.setLocalScale(scale, scale, 0.22);
+
+      if (!removed) {
+        const label = new pc.Entity(`${cell.id}-label`, this.app);
+        const labelMaterial = this.getNumberLabelMaterial(cell.value, highlighted);
+        const labelMesh = createNumberLabelMesh(this.app.graphicsDevice);
+        const labelMeshInstance = new pc.MeshInstance(labelMesh, labelMaterial);
+
+        this.numberBoardRoot.addChild(label);
+        label.addComponent('render', {
+          meshInstances: [labelMeshInstance]
+        });
+        label.setLocalPosition(x, y, 0.4);
+        label.setLocalScale(0.46, 0.46, 1);
+      }
     }
+  }
+
+  private getNumberLabelMaterial(value: number, highlighted: boolean): pc.StandardMaterial {
+    const key = `${value}-${highlighted ? 'highlighted' : 'normal'}`;
+    const cached = this.numberLabelMaterials.get(key);
+
+    if (cached) {
+      return cached;
+    }
+
+    const material = createNumberLabelMaterial(this.app.graphicsDevice, String(value), highlighted);
+    this.numberLabelMaterials.set(key, material);
+    return material;
   }
 
   private animateToState(state: SorobanState): void {
@@ -454,6 +487,87 @@ function numberBoardMaterial(name: string, diffuse: pc.Color, emissive: pc.Color
   nextMaterial.update();
 
   return nextMaterial;
+}
+
+function createNumberLabelMesh(device: pc.GraphicsDevice): pc.Mesh {
+  const geometry = new pc.Geometry();
+
+  geometry.positions = [
+    -0.5, -0.5, 0,
+    0.5, -0.5, 0,
+    0.5, 0.5, 0,
+    -0.5, 0.5, 0
+  ];
+  geometry.normals = [
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1,
+    0, 0, 1
+  ];
+  geometry.uvs = [
+    0, 1,
+    1, 1,
+    1, 0,
+    0, 0
+  ];
+  geometry.indices = [0, 1, 2, 0, 2, 3];
+
+  return pc.Mesh.fromGeometry(device, geometry);
+}
+
+function createNumberLabelMaterial(device: pc.GraphicsDevice, text: string, highlighted: boolean): pc.StandardMaterial {
+  const texture = createNumberLabelTexture(device, text, highlighted);
+  const material = new pc.StandardMaterial();
+
+  material.name = `number-label-${text}-${highlighted ? 'highlighted' : 'normal'}`;
+  material.diffuse = new pc.Color(1, 1, 1);
+  material.emissive = new pc.Color(1, 1, 1);
+  material.emissiveIntensity = highlighted ? 0.34 : 0.2;
+  material.diffuseMap = texture;
+  material.opacityMap = texture;
+  material.opacityMapChannel = 'a';
+  material.useLighting = false;
+  material.blendType = pc.BLEND_NORMAL;
+  material.depthWrite = false;
+  material.update();
+
+  return material;
+}
+
+function createNumberLabelTexture(device: pc.GraphicsDevice, text: string, highlighted: boolean): pc.Texture {
+  const canvas = document.createElement('canvas');
+  const size = 256;
+  const context = canvas.getContext('2d');
+
+  canvas.width = size;
+  canvas.height = size;
+
+  if (!context) {
+    throw new Error('Could not create number label texture context.');
+  }
+
+  context.clearRect(0, 0, size, size);
+  context.font = '800 92px Inter, system-ui, sans-serif';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.lineJoin = 'round';
+  context.shadowColor = highlighted ? 'rgba(255, 231, 170, 0.58)' : 'rgba(0, 0, 0, 0.78)';
+  context.shadowBlur = highlighted ? 10 : 12;
+  context.shadowOffsetY = 5;
+  context.lineWidth = highlighted ? 10 : 8;
+  context.strokeStyle = highlighted ? 'rgba(255, 222, 140, 0.52)' : 'rgba(4, 8, 10, 0.72)';
+  context.fillStyle = highlighted ? '#160d05' : '#f4fbff';
+  context.strokeText(text, size / 2, size / 2 + 4);
+  context.fillText(text, size / 2, size / 2 + 4);
+
+  const texture = new pc.Texture(device, {
+    width: size,
+    height: size,
+    mipmaps: true
+  });
+
+  texture.setSource(canvas);
+  return texture;
 }
 
 function getNumberBoardRenderLayout(
