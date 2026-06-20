@@ -58,6 +58,7 @@ class NumberBoardBubbleRenderer {
     });
     this.app.setCanvasFillMode(pc.FILLMODE_NONE);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
+    this.app.graphicsDevice.maxPixelRatio = getRenderPixelRatio();
     this.app.scene.ambientLight = new pc.Color(0.52, 0.56, 0.62);
     this.app.scene.exposure = 1.22;
 
@@ -133,6 +134,14 @@ class NumberBoardBubbleRenderer {
   destroy(): void {
     this.app.destroy();
   }
+}
+
+function getRenderPixelRatio(): number {
+  if (typeof window === 'undefined') {
+    return 1;
+  }
+
+  return Math.min(2, Math.max(1, window.devicePixelRatio || 1));
 }
 
 function createMaterials() {

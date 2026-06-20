@@ -182,7 +182,15 @@ export function App() {
   }, [sorobanValue]);
 
   const commitBoardSelection = useCallback(() => {
-    setNumberBoard((currentBoard) => commitNumberBoardSelection(currentBoard).state);
+    setNumberBoard((currentBoard) => {
+      const commit = commitNumberBoardSelection(currentBoard);
+
+      if (commit.success) {
+        setState((currentState) => createSorobanState({ columns: currentState.config.columns }));
+      }
+
+      return commit.state;
+    });
   }, []);
 
   return (
@@ -324,6 +332,21 @@ export function App() {
                 }}
               >
                 Rnd
+              </button>
+            </div>
+          </div>
+          <div>
+            <span className="label">Seed</span>
+            <div className="seed-control">
+              <input id="board-seed" type="text" readOnly value={numberBoardSeed} />
+              <button
+                id="copy-seed"
+                type="button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(numberBoardSeed);
+                }}
+              >
+                Copy
               </button>
             </div>
           </div>

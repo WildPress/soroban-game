@@ -39,6 +39,7 @@ async function testAppValueDisplay(browser) {
   await page.locator('#settings-toggle').click();
   await page.waitForSelector('#column-controls .column-value');
   assert.equal(await page.locator('#columns').getAttribute('max'), '3');
+  assert.equal(await page.locator('#board-seed').inputValue(), 'starter-3x3-v1');
   await expectColumnValues(page, Array.from({ length: 3 }, () => '0'));
 
   await page.locator('#columns').fill('2');

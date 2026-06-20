@@ -138,6 +138,32 @@ test('keeps a partial chain through unresolved intermediate totals', () => {
   assert.deepEqual(getHighlightedCells(completedPreview.state).map((cell) => cell.value), [4, 8, 3, 42]);
 });
 
+test('keeps a partial chain through transient lower soroban values', () => {
+  const board = createNumberBoard(createSeededNumberBoardValues('starter-3x3-v1'), { width: 3, height: 3 });
+  const partialChain = [4, 12, 15].reduce(
+    (currentBoard, value) => previewNumberBoardValue(currentBoard, value).state,
+    board
+  );
+  const lowerPreview = previewNumberBoardValue(partialChain, 5);
+  const completedPreview = previewNumberBoardValue(lowerPreview.state, 57);
+
+  assert.equal(lowerPreview.kind, 'none');
+  assert.equal(lowerPreview.sum, 15);
+  assert.deepEqual(getHighlightedCells(lowerPreview.state).map((cell) => cell.value), [4, 8, 3]);
+  assert.equal(completedPreview.kind, 'extension');
+  assert.deepEqual(getHighlightedCells(completedPreview.state).map((cell) => cell.value), [4, 8, 3, 42]);
+});
+
+test('chains more than four seeded board numbers', () => {
+  const board = createNumberBoard(createSeededNumberBoardValues('starter-3x3-v1'), { width: 3, height: 3 });
+  const preview = [4, 12, 15, 57, 117, 188].reduce(
+    (currentBoard, value) => previewNumberBoardValue(currentBoard, value).state,
+    board
+  );
+
+  assert.deepEqual(getHighlightedCells(preview).map((cell) => cell.value), [4, 8, 3, 42, 60, 71]);
+});
+
 test('go can remove a completed addition chain', () => {
   const board = createNumberBoard(createUniquePairBoardValues(100, {
     seeds: [27, 4, 8, 60, 71, 3, 13]

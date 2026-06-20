@@ -52,8 +52,8 @@ type BeadEntity = Readonly<{
   isPlaceBead: boolean;
 }>;
 const horizontalPagePadding = 44;
-const minCanvasHeight = 220;
-const maxCanvasHeight = 360;
+const minCanvasHeight = 280;
+const maxCanvasHeight = 430;
 const beadCenterZ = 0;
 const jscadOutputScale = 18;
 const defaultBeadShape = {
@@ -89,6 +89,7 @@ export class PlayCanvasSorobanRenderer {
     });
     this.app.setCanvasFillMode(pc.FILLMODE_NONE);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
+    this.app.graphicsDevice.maxPixelRatio = getRenderPixelRatio();
     this.app.scene.ambientLight = new pc.Color(0.68, 0.64, 0.58);
     this.app.scene.exposure = 1.28;
 
@@ -255,7 +256,7 @@ export class PlayCanvasSorobanRenderer {
     const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspect);
     const distanceForHeight = height / (2 * Math.tan(verticalFov / 2));
     const distanceForWidth = width / (2 * Math.tan(horizontalFov / 2));
-    const padding = width < 4 ? 1.08 : 1.02;
+    const padding = width < 4 ? 0.96 : 1.02;
     const distance = Math.max(distanceForHeight, distanceForWidth) * padding;
 
     this.camera.setLocalPosition(0, -0.72, distance);
@@ -837,7 +838,7 @@ function toRgba(hex: string, alpha: number): string {
 function getDisplayCanvasSize(columns: number): { width: number; height: number } {
   const width = getDisplayCanvasWidth(columns);
   const viewportHeight = typeof window === 'undefined' ? 900 : window.innerHeight;
-  const height = Math.round(Math.min(maxCanvasHeight, Math.max(minCanvasHeight, viewportHeight * 0.32)));
+  const height = Math.round(Math.min(maxCanvasHeight, Math.max(minCanvasHeight, viewportHeight * 0.44)));
 
   return { width, height };
 }
@@ -850,4 +851,12 @@ function getDisplayCanvasWidth(columns: number): number {
   }
 
   return Math.round(Math.min(desiredWidth, Math.max(300, window.innerWidth - horizontalPagePadding)));
+}
+
+function getRenderPixelRatio(): number {
+  if (typeof window === 'undefined') {
+    return 1;
+  }
+
+  return Math.min(2, Math.max(1, window.devicePixelRatio || 1));
 }

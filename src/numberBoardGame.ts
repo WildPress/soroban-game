@@ -103,6 +103,10 @@ export function previewNumberBoardValue(
     return toPreview(state, target, highlightedCells.map((cell) => cell.id), highlightedCells.length === 1 ? 'exact' : 'sum');
   }
 
+  if (highlightedCells.length > 0 && highlightedSum > target) {
+    return toPreview(state, target, highlightedCells.map((cell) => cell.id), 'none');
+  }
+
   if (highlightedCells.length > 0 && highlightedSum < target) {
     const remainingCells = activeCells.filter((cell) => !state.highlightedCellIds.includes(cell.id));
     const remainingValue = target - highlightedSum;
