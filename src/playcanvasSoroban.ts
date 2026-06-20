@@ -7,6 +7,7 @@ import {
   type BeadModel,
   type SorobanState
 } from './soroban.js';
+import type { NumberBoardState } from './numberBoardGame.js';
 
 export type ThemeName = 'walnut' | 'ash' | 'slate';
 export type BeadShapeStyle = Readonly<{
@@ -52,8 +53,12 @@ type BeadEntity = Readonly<{
   isPlaceBead: boolean;
 }>;
 const horizontalPagePadding = 44;
-const minCanvasHeight = 280;
-const maxCanvasHeight = 430;
+const minCanvasHeight = 620;
+const maxCanvasHeight = 780;
+const gameCanvasVerticalPadding = 24;
+const numberBubbleSpacing = 0.96;
+const numberBubbleDiameter = 0.78;
+const numberBoardGap = 0.54;
 const beadCenterZ = 0;
 const jscadOutputScale = 18;
 const defaultBeadShape = {
@@ -69,7 +74,9 @@ export class PlayCanvasSorobanRenderer {
   private readonly fillLight: pc.Entity;
   private readonly accentLight: pc.Entity;
   private readonly root: pc.Entity;
+  private readonly numberBoardRoot: pc.Entity;
   private materials: ReturnType<typeof createMaterials>;
+  private readonly numberBoardMaterials: ReturnType<typeof createNumberBoardMaterials>;
   private beadShape: BeadShapeStyle = defaultBeadShape;
   private readonly screenPoint = new pc.Vec3();
   private readonly worldPoint = new pc.Vec3();
@@ -77,6 +84,7 @@ export class PlayCanvasSorobanRenderer {
   private beadEntities = new Map<string, BeadEntity>();
   private cadMeshes: pc.Mesh[] = [];
   private renderLayout: CadRenderLayout | null = null;
+  private numberBoardState: NumberBoardState | null = null;
   private renderedState: SorobanState | null = null;
   private animationFrame: number | null = null;
 
@@ -94,7 +102,9 @@ export class PlayCanvasSorobanRenderer {
     this.app.scene.exposure = 1.28;
 
     this.materials = createMaterials(this.app.graphicsDevice, 'walnut');
+    this.numberBoardMaterials = createNumberBoardMaterials();
     this.root = new pc.Entity('parametric-soroban');
+    this.numberBoardRoot = new pc.Entity('number-board-bubbles', this.app);
 
     this.camera = new pc.Entity('camera');
     this.camera.addComponent('camera', {
@@ -138,12 +148,14 @@ export class PlayCanvasSorobanRenderer {
     this.accentLight.setLocalPosition(-1.8, 1.4, 3.2);
     this.app.root.addChild(this.accentLight);
     this.app.root.addChild(this.root);
+    this.app.root.addChild(this.numberBoardRoot);
     this.app.start();
   }
 
-  rebuild(state: SorobanState): void {
+  rebuild(state: SorobanState, numberBoard?: NumberBoardState): void {
     const model = createSorobanModel(state);
     const canvasSize = getDisplayCanvasSize(model.config.columns);
+    const nextNumberBoard = numberBoard ?? this.numberBoardState;
 
     this.canvas.style.setProperty('--columns', model.config.columns.toString());
     this.canvas.style.width = `${canvasSize.width}px`;
@@ -156,6 +168,7 @@ export class PlayCanvasSorobanRenderer {
     this.beadEntities = new Map<string, BeadEntity>();
     const boardTilt = -8;
     this.root.setLocalEulerAngles(boardTilt, 0, 0);
+    this.numberBoardRoot.setLocalEulerAngles(boardTilt, 0, 0);
     this.renderLayout = addJscadSorobanMeshes(
       this.root,
       this.app.graphicsDevice,
@@ -165,8 +178,11 @@ export class PlayCanvasSorobanRenderer {
       this.cadMeshes,
       this.beadEntities
     );
+    this.numberBoardState = nextNumberBoard;
+    this.rebuildNumberBoard();
     this.renderedState = state;
-    this.fitCamera(this.renderLayout.width, this.renderLayout.height);
+    const combinedLayout = getCombinedRenderLayout(this.renderLayout, nextNumberBoard);
+    this.fitCamera(combinedLayout.width, combinedLayout.height, combinedLayout.centerY);
   }
 
   update(state: SorobanState, animate = false): void {
@@ -201,6 +217,11 @@ export class PlayCanvasSorobanRenderer {
 
     this.beadShape = shape;
     this.rebuild(state);
+  }
+
+  setNumberBoard(state: NumberBoardState): void {
+    this.numberBoardState = state;
+    this.rebuildNumberBoard();
   }
 
   setGrabbedBead(beadId: string | null): void {
@@ -250,7 +271,7 @@ export class PlayCanvasSorobanRenderer {
     this.app.destroy();
   }
 
-  private fitCamera(width: number, height: number): void {
+  private fitCamera(width: number, height: number, centerY: number): void {
     const aspect = Math.max(1, this.canvas.width / Math.max(1, this.canvas.height));
     const verticalFov = 24 * Math.PI / 180;
     const horizontalFov = 2 * Math.atan(Math.tan(verticalFov / 2) * aspect);
@@ -259,8 +280,44 @@ export class PlayCanvasSorobanRenderer {
     const padding = width < 4 ? 0.96 : 1.02;
     const distance = Math.max(distanceForHeight, distanceForWidth) * padding;
 
-    this.camera.setLocalPosition(0, -0.72, distance);
-    this.camera.lookAt(0, -0.24, 0);
+    this.camera.setLocalPosition(0, centerY - 0.55, distance);
+    this.camera.lookAt(0, centerY - 0.02, 0);
+  }
+
+  private rebuildNumberBoard(): void {
+    const state = this.numberBoardState;
+    const layout = this.renderLayout;
+
+    this.numberBoardRoot.children.slice().forEach((child) => child.destroy());
+
+    if (!state || !layout) {
+      return;
+    }
+
+    const highlightedIds = new Set(state.highlightedCellIds);
+    const bubbleLayout = getNumberBoardRenderLayout(layout, state);
+
+    for (const cell of state.cells) {
+      const entity = new pc.Entity(cell.id, this.app);
+      const highlighted = highlightedIds.has(cell.id);
+      const removed = cell.status === 'removed';
+      const material = removed
+        ? this.numberBoardMaterials.removed
+        : highlighted
+          ? this.numberBoardMaterials.highlighted
+          : this.numberBoardMaterials.active[(cell.row * state.width + cell.column) % this.numberBoardMaterials.active.length];
+      const x = (cell.column - (state.width - 1) / 2) * numberBubbleSpacing;
+      const y = bubbleLayout.centerY + ((state.height - 1) / 2 - cell.row) * numberBubbleSpacing;
+      const scale = removed ? 0.34 : highlighted ? 0.74 : 0.68;
+
+      this.numberBoardRoot.addChild(entity);
+      entity.addComponent('render', {
+        type: 'sphere',
+        material
+      });
+      entity.setLocalPosition(x, y, highlighted ? 0.16 : 0.08);
+      entity.setLocalScale(scale, scale, 0.22);
+    }
   }
 
   private animateToState(state: SorobanState): void {
@@ -366,6 +423,73 @@ function createMaterials(device: pc.GraphicsDevice, themeName: ThemeName) {
     ebonyGrabbed: material('place-bead-grabbed', theme.place, 0.98, 0, placeTexture, [1.6, 1], 0.1),
     brass: material('brass', new pc.Color(0.82, 0.58, 0.26), 0.58, 0.7),
     rod: material('rod', new pc.Color(0.58, 0.58, 0.54), 0.26, 0.16)
+  };
+}
+
+function createNumberBoardMaterials() {
+  return {
+    active: [
+      numberBoardMaterial('bubble-active-teal', new pc.Color(0.13, 0.35, 0.36), new pc.Color(0.31, 0.76, 0.72), 0.98),
+      numberBoardMaterial('bubble-active-blue', new pc.Color(0.14, 0.24, 0.42), new pc.Color(0.37, 0.55, 0.95), 0.98),
+      numberBoardMaterial('bubble-active-plum', new pc.Color(0.32, 0.18, 0.34), new pc.Color(0.8, 0.44, 0.86), 0.98),
+      numberBoardMaterial('bubble-active-forest', new pc.Color(0.18, 0.34, 0.22), new pc.Color(0.54, 0.85, 0.5), 0.98),
+      numberBoardMaterial('bubble-active-slate', new pc.Color(0.24, 0.3, 0.36), new pc.Color(0.58, 0.68, 0.78), 0.98)
+    ],
+    highlighted: numberBoardMaterial('bubble-highlighted', new pc.Color(0.95, 0.55, 0.13), new pc.Color(1, 0.82, 0.36), 0.98),
+    removed: numberBoardMaterial('bubble-removed', new pc.Color(0.08, 0.09, 0.1), new pc.Color(0.18, 0.2, 0.22), 0.3)
+  };
+}
+
+function numberBoardMaterial(name: string, diffuse: pc.Color, emissive: pc.Color, opacity: number): pc.StandardMaterial {
+  const nextMaterial = new pc.StandardMaterial();
+
+  nextMaterial.name = name;
+  nextMaterial.diffuse = diffuse;
+  nextMaterial.emissive = emissive;
+  nextMaterial.emissiveIntensity = 0.18;
+  nextMaterial.gloss = 0.72;
+  nextMaterial.metalness = 0.08;
+  nextMaterial.opacity = opacity;
+  nextMaterial.blendType = opacity < 1 ? pc.BLEND_NORMAL : pc.BLEND_NONE;
+  nextMaterial.update();
+
+  return nextMaterial;
+}
+
+function getNumberBoardRenderLayout(
+  sorobanLayout: CadRenderLayout,
+  state: NumberBoardState
+): { width: number; height: number; centerY: number } {
+  const width = (state.width - 1) * numberBubbleSpacing + numberBubbleDiameter;
+  const height = (state.height - 1) * numberBubbleSpacing + numberBubbleDiameter;
+
+  return {
+    width,
+    height,
+    centerY: sorobanLayout.height / 2 + numberBoardGap + height / 2
+  };
+}
+
+function getCombinedRenderLayout(
+  sorobanLayout: CadRenderLayout,
+  numberBoard: NumberBoardState | null
+): { width: number; height: number; centerY: number } {
+  if (!numberBoard) {
+    return {
+      width: sorobanLayout.width,
+      height: sorobanLayout.height,
+      centerY: 0
+    };
+  }
+
+  const numberBoardLayout = getNumberBoardRenderLayout(sorobanLayout, numberBoard);
+  const minY = -sorobanLayout.height / 2;
+  const maxY = numberBoardLayout.centerY + numberBoardLayout.height / 2;
+
+  return {
+    width: Math.max(sorobanLayout.width, numberBoardLayout.width),
+    height: maxY - minY,
+    centerY: (minY + maxY) / 2
   };
 }
 
@@ -838,7 +962,7 @@ function toRgba(hex: string, alpha: number): string {
 function getDisplayCanvasSize(columns: number): { width: number; height: number } {
   const width = getDisplayCanvasWidth(columns);
   const viewportHeight = typeof window === 'undefined' ? 900 : window.innerHeight;
-  const height = Math.round(Math.min(maxCanvasHeight, Math.max(minCanvasHeight, viewportHeight * 0.44)));
+  const height = Math.round(Math.min(maxCanvasHeight, Math.max(minCanvasHeight, viewportHeight - gameCanvasVerticalPadding)));
 
   return { width, height };
 }

@@ -140,12 +140,13 @@ async function columnValues(page) {
 
 async function expectNumberBoardReady(page) {
   await page.waitForSelector('#number-board .number-cell');
-  await page.waitForSelector('#number-board .number-board-canvas');
   assert.equal(await page.locator('#number-board .number-cell').count(), 9);
+  assert.equal(await page.locator('#number-board .number-board-canvas').count(), 0);
+  assert.equal(await page.locator('#soroban-canvas').count(), 1);
   assert.equal(await page.locator('#board-target').innerText(), '0');
   assert.equal(await page.locator('#board-go').isDisabled(), true);
 
-  const bubbleCanvas = await page.locator('#number-board .number-board-canvas').evaluate((canvas) => {
+  const gameCanvas = await page.locator('#soroban-canvas').evaluate((canvas) => {
     const rect = canvas.getBoundingClientRect();
 
     return {
@@ -154,8 +155,8 @@ async function expectNumberBoardReady(page) {
     };
   });
 
-  assert.ok(bubbleCanvas.width > 200, `expected WebGL bubble board width, got ${bubbleCanvas.width}`);
-  assert.ok(bubbleCanvas.height > 200, `expected WebGL bubble board height, got ${bubbleCanvas.height}`);
+  assert.ok(gameCanvas.width > 300, `expected shared WebGL game canvas width, got ${gameCanvas.width}`);
+  assert.ok(gameCanvas.height > 600, `expected shared WebGL game canvas height, got ${gameCanvas.height}`);
 }
 
 async function expectAppFitsViewport(page) {

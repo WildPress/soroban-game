@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSorobanState, getTotalValue, type SorobanState } from './soroban.js';
 import { PlayCanvasBoard } from './PlayCanvasBoard.js';
-import { PlayCanvasNumberBoard } from './PlayCanvasNumberBoard.js';
 import type { BeadShapeStyle, ThemeName } from './playcanvasSoroban.js';
 import {
   commitNumberBoardSelection,
@@ -208,58 +207,60 @@ export function App() {
         Settings
       </button>
 
-      <section className="number-board-panel" aria-label="Number board">
-        <div className="number-board-header">
-          <div className="sr-only">
-            <span className="label">Target</span>
-            <strong id="board-target">{sorobanValue}</strong>
+      <section className="game-board-shell" aria-label="Game board">
+        <PlayCanvasBoard
+          state={state}
+          numberBoard={numberBoard}
+          theme={theme}
+          beadShape={activeBeadShape}
+          onCommitState={commitState}
+          onInteractionStart={ensureAudioContext}
+        />
+
+        <section className="number-board-overlay" aria-label="Number board">
+          <div className="number-board-header">
+            <div className="sr-only">
+              <span className="label">Target</span>
+              <strong id="board-target">{sorobanValue}</strong>
+            </div>
+            <button
+              id="board-go"
+              className={!canCommitBoardSelection ? 'is-hidden-action' : ''}
+              type="button"
+              disabled={!canCommitBoardSelection}
+              onClick={commitBoardSelection}
+            >
+              Go
+            </button>
           </div>
-          <button
-            id="board-go"
-            className={!canCommitBoardSelection ? 'is-hidden-action' : ''}
-            type="button"
-            disabled={!canCommitBoardSelection}
-            onClick={commitBoardSelection}
+          <div
+            id="number-board"
+            className="number-board"
+            style={{ gridTemplateColumns: `repeat(${numberBoard.width}, minmax(0, 1fr))` }}
           >
-            Go
-          </button>
-        </div>
-        <div
-          id="number-board"
-          className="number-board"
-          style={{ gridTemplateColumns: `repeat(${numberBoard.width}, minmax(0, 1fr))` }}
-        >
-          <PlayCanvasNumberBoard state={numberBoard} />
-          {numberBoard.cells.map((cell) => {
-            const highlighted = numberBoard.highlightedCellIds.includes(cell.id);
+            {numberBoard.cells.map((cell) => {
+              const highlighted = numberBoard.highlightedCellIds.includes(cell.id);
 
-            return (
-              <span
-                key={cell.id}
-                className={[
-                  'number-cell',
-                  highlighted ? 'is-highlighted' : '',
-                  cell.status === 'removed' ? 'is-removed' : ''
-                ].filter(Boolean).join(' ')}
-                data-cell-id={cell.id}
-                data-cell-value={cell.value}
-                data-cell-status={cell.status}
-                aria-label={`${cell.status === 'removed' ? 'Removed' : 'Active'} number ${cell.value}`}
-              >
-                {cell.status === 'removed' ? '' : cell.value}
-              </span>
-            );
-          })}
-        </div>
+              return (
+                <span
+                  key={cell.id}
+                  className={[
+                    'number-cell',
+                    highlighted ? 'is-highlighted' : '',
+                    cell.status === 'removed' ? 'is-removed' : ''
+                  ].filter(Boolean).join(' ')}
+                  data-cell-id={cell.id}
+                  data-cell-value={cell.value}
+                  data-cell-status={cell.status}
+                  aria-label={`${cell.status === 'removed' ? 'Removed' : 'Active'} number ${cell.value}`}
+                >
+                  {cell.status === 'removed' ? '' : cell.value}
+                </span>
+              );
+            })}
+          </div>
+        </section>
       </section>
-
-      <PlayCanvasBoard
-        state={state}
-        theme={theme}
-        beadShape={activeBeadShape}
-        onCommitState={commitState}
-        onInteractionStart={ensureAudioContext}
-      />
 
       <section id="settings-panel" className="settings-panel" hidden={!settingsOpen}>
         <header>

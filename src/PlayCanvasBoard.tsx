@@ -8,10 +8,12 @@ import {
   type BeadSection,
   type SorobanState
 } from './soroban.js';
+import type { NumberBoardState } from './numberBoardGame.js';
 import { PlayCanvasSorobanRenderer, type BeadShapeStyle, type ThemeName } from './playcanvasSoroban.js';
 
 type PlayCanvasBoardProps = Readonly<{
   state: SorobanState;
+  numberBoard: NumberBoardState;
   theme: ThemeName;
   beadShape: BeadShapeStyle;
   onCommitState: (state: SorobanState) => void;
@@ -29,6 +31,7 @@ const dragSnapDistancePx = 72;
 
 export function PlayCanvasBoard({
   state,
+  numberBoard,
   theme,
   beadShape,
   onCommitState,
@@ -37,6 +40,7 @@ export function PlayCanvasBoard({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const rendererRef = useRef<PlayCanvasSorobanRenderer | null>(null);
   const stateRef = useRef(state);
+  const numberBoardRef = useRef(numberBoard);
   const themeRef = useRef(theme);
   const beadShapeRef = useRef(beadShape);
   const onCommitStateRef = useRef(onCommitState);
@@ -44,11 +48,13 @@ export function PlayCanvasBoard({
   const activePointerRef = useRef<ActivePointer | null>(null);
   const previousRenderRef = useRef<{
     state: SorobanState;
+    numberBoard: NumberBoardState;
     theme: ThemeName;
     beadShape: BeadShapeStyle;
   } | null>(null);
 
   stateRef.current = state;
+  numberBoardRef.current = numberBoard;
   themeRef.current = theme;
   beadShapeRef.current = beadShape;
   onCommitStateRef.current = onCommitState;
@@ -65,7 +71,7 @@ export function PlayCanvasBoard({
     rendererRef.current = renderer;
 
     const handleResize = () => {
-      renderer.rebuild(stateRef.current);
+      renderer.rebuild(stateRef.current, numberBoardRef.current);
       renderer.setBeadShape(beadShapeRef.current, stateRef.current);
     };
 
@@ -155,16 +161,17 @@ export function PlayCanvasBoard({
     const previousRender = previousRenderRef.current;
 
     if (!previousRender) {
-      renderer.rebuild(state);
+      renderer.rebuild(state, numberBoard);
       renderer.setTheme(theme, state);
       renderer.setBeadShape(beadShape, state);
-      previousRenderRef.current = { state, theme, beadShape };
+      previousRenderRef.current = { state, numberBoard, theme, beadShape };
       return;
     }
 
     const themeChanged = previousRender.theme !== theme;
     const styleChanged = !isSameBeadShape(previousRender.beadShape, beadShape);
     const columnsChanged = previousRender.state.config.columns !== state.config.columns;
+    const numberBoardChanged = previousRender.numberBoard !== numberBoard;
 
     if (themeChanged) {
       renderer.setTheme(theme, state);
@@ -174,17 +181,21 @@ export function PlayCanvasBoard({
       renderer.setBeadShape(beadShape, state);
     }
 
+    if (numberBoardChanged) {
+      renderer.setNumberBoard(numberBoard);
+    }
+
     if (!themeChanged && !styleChanged) {
       if (columnsChanged) {
-        renderer.rebuild(state);
+        renderer.rebuild(state, numberBoard);
       } else {
         const changed = state.values.some((value, index) => value !== previousRender.state.values[index]);
         renderer.update(state, changed);
       }
     }
 
-    previousRenderRef.current = { state, theme, beadShape };
-  }, [state, theme, beadShape]);
+    previousRenderRef.current = { state, numberBoard, theme, beadShape };
+  }, [state, numberBoard, theme, beadShape]);
 
   return (
     <canvas
