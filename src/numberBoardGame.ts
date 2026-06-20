@@ -16,7 +16,7 @@ export type NumberBoardState = Readonly<{
   highlightedCellIds: readonly string[];
 }>;
 
-export type NumberBoardMatchKind = 'none' | 'exact' | 'sum' | 'extension';
+export type NumberBoardMatchKind = 'none' | 'exact' | 'sum' | 'extension' | 'ambiguous';
 
 export type NumberBoardPreview = Readonly<{
   state: NumberBoardState;
@@ -36,9 +36,14 @@ export type NumberBoardOptions = Readonly<{
   maxAddends?: number;
 }>;
 
+export type UniquePairBoardOptions = Readonly<{
+  seeds?: readonly number[];
+  minValue?: number;
+}>;
+
 const defaultWidth = 10;
 const defaultHeight = 10;
-const defaultMaxAddends = 4;
+const defaultMaxAddends = 5;
 
 export function createNumberBoard(values: readonly number[], options: NumberBoardOptions = {}): NumberBoardState {
   const width = options.width ?? defaultWidth;
@@ -94,31 +99,73 @@ export function previewNumberBoardValue(
 
   if (highlightedCells.length > 0 && highlightedSum < target) {
     const remainingCells = activeCells.filter((cell) => !state.highlightedCellIds.includes(cell.id));
-    const extension = findCellCombination(remainingCells, target - highlightedSum, maxAddends - highlightedCells.length);
+    const extension = findUniqueCellCombination(remainingCells, target - highlightedSum, maxAddends - highlightedCells.length);
 
-    if (extension) {
+    if (extension.kind === 'unique') {
       return toPreview(
         state,
         target,
-        [...highlightedCells.map((cell) => cell.id), ...extension.map((cell) => cell.id)],
+        [...highlightedCells.map((cell) => cell.id), ...extension.cells.map((cell) => cell.id)],
         'extension'
       );
     }
+
+    if (extension.kind === 'ambiguous') {
+      return toPreview(state, target, [], 'ambiguous');
+    }
   }
 
-  const exact = activeCells.find((cell) => cell.value === target);
+  const exactMatches = activeCells.filter((cell) => cell.value === target);
 
-  if (exact) {
-    return toPreview(state, target, [exact.id], 'exact');
+  if (exactMatches.length === 1) {
+    const exact = exactMatches[0];
+
+    if (exact) {
+      return toPreview(state, target, [exact.id], 'exact');
+    }
   }
 
-  const combination = findCellCombination(activeCells, target, maxAddends);
+  if (exactMatches.length > 1) {
+    return toPreview(state, target, [], 'ambiguous');
+  }
 
-  if (combination) {
-    return toPreview(state, target, combination.map((cell) => cell.id), 'sum');
+  const combination = findUniqueCellCombination(activeCells, target, maxAddends);
+
+  if (combination.kind === 'unique') {
+    return toPreview(state, target, combination.cells.map((cell) => cell.id), 'sum');
+  }
+
+  if (combination.kind === 'ambiguous') {
+    return toPreview(state, target, [], 'ambiguous');
   }
 
   return toPreview(state, target, [], 'none');
+}
+
+export function createUniquePairBoardValues(count: number, options: UniquePairBoardOptions = {}): readonly number[] {
+  const values: number[] = [];
+  const pairSums = new Set<number>();
+  const blockedSingleValues = new Set<number>();
+  const seeds = options.seeds ?? [];
+  let candidate = options.minValue ?? 1;
+
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error('Unique board count must be a positive integer.');
+  }
+
+  for (const seed of seeds) {
+    addUniquePairValue(values, pairSums, blockedSingleValues, normalizeBoardValue(seed));
+  }
+
+  while (values.length < count) {
+    if (canAddUniquePairValue(values, pairSums, blockedSingleValues, candidate)) {
+      addUniquePairValue(values, pairSums, blockedSingleValues, candidate);
+    }
+
+    candidate += 1;
+  }
+
+  return values;
 }
 
 export function commitNumberBoardSelection(state: NumberBoardState): NumberBoardCommit {
@@ -178,42 +225,118 @@ function toPreview(
   };
 }
 
-function findCellCombination(
+type CellCombinationSearch = Readonly<
+  | { kind: 'none'; cells: readonly [] }
+  | { kind: 'unique'; cells: readonly NumberBoardCell[] }
+  | { kind: 'ambiguous'; cells: readonly [] }
+>;
+
+function findUniqueCellCombination(
   cells: readonly NumberBoardCell[],
   targetValue: number,
   maxAddends: number
-): readonly NumberBoardCell[] | null {
+): CellCombinationSearch {
   if (targetValue <= 0 || maxAddends <= 0) {
-    return null;
+    return { kind: 'none', cells: [] };
   }
 
-  const pathsBySum = new Map<number, readonly NumberBoardCell[]>([[0, []]]);
+  if (targetValue > getMaxPossibleSum(cells, maxAddends)) {
+    return { kind: 'none', cells: [] };
+  }
 
-  for (const cell of cells) {
-    const paths = [...pathsBySum.entries()];
+  const matches: NumberBoardCell[][] = [];
 
-    for (const [sum, path] of paths) {
-      if (path.length >= maxAddends) {
-        continue;
-      }
+  findMatchingCellPaths(cells, targetValue, maxAddends, 0, 0, [], matches);
 
-      const nextSum = sum + cell.value;
+  if (matches.length === 0) {
+    return { kind: 'none', cells: [] };
+  }
 
-      if (nextSum > targetValue || pathsBySum.has(nextSum)) {
-        continue;
-      }
+  if (matches.length > 1) {
+    return { kind: 'ambiguous', cells: [] };
+  }
 
-      const nextPath = [...path, cell];
+  return { kind: 'unique', cells: matches[0] ?? [] };
+}
 
-      if (nextSum === targetValue) {
-        return nextPath;
-      }
+function getMaxPossibleSum(cells: readonly NumberBoardCell[], maxAddends: number): number {
+  return [...cells]
+    .sort((left, right) => right.value - left.value)
+    .slice(0, maxAddends)
+    .reduce((sum, cell) => sum + cell.value, 0);
+}
 
-      pathsBySum.set(nextSum, nextPath);
+function findMatchingCellPaths(
+  cells: readonly NumberBoardCell[],
+  targetValue: number,
+  maxAddends: number,
+  startIndex: number,
+  currentSum: number,
+  path: readonly NumberBoardCell[],
+  matches: NumberBoardCell[][]
+): void {
+  if (matches.length > 1) {
+    return;
+  }
+
+  if (currentSum === targetValue && path.length > 0) {
+    matches.push([...path]);
+    return;
+  }
+
+  if (path.length >= maxAddends || currentSum >= targetValue) {
+    return;
+  }
+
+  for (let index = startIndex; index < cells.length; index += 1) {
+    const cell = cells[index];
+
+    if (!cell || currentSum + cell.value > targetValue) {
+      continue;
+    }
+
+    findMatchingCellPaths(cells, targetValue, maxAddends, index + 1, currentSum + cell.value, [...path, cell], matches);
+  }
+}
+
+function canAddUniquePairValue(
+  values: readonly number[],
+  pairSums: ReadonlySet<number>,
+  blockedSingleValues: ReadonlySet<number>,
+  value: number
+): boolean {
+  if (!Number.isInteger(value) || value < 1 || values.includes(value) || blockedSingleValues.has(value)) {
+    return false;
+  }
+
+  for (const existingValue of values) {
+    const sum = existingValue + value;
+
+    if (pairSums.has(sum) || values.includes(sum)) {
+      return false;
     }
   }
 
-  return null;
+  return true;
+}
+
+function addUniquePairValue(
+  values: number[],
+  pairSums: Set<number>,
+  blockedSingleValues: Set<number>,
+  value: number
+): void {
+  if (!canAddUniquePairValue(values, pairSums, blockedSingleValues, value)) {
+    throw new Error(`Value ${value} would create a pair-sum collision.`);
+  }
+
+  for (const existingValue of values) {
+    const sum = existingValue + value;
+    pairSums.add(sum);
+    blockedSingleValues.add(sum);
+  }
+
+  values.push(value);
 }
 
 function getCellsById(cells: readonly NumberBoardCell[], ids: readonly string[]): readonly NumberBoardCell[] {

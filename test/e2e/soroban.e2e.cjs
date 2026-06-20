@@ -32,6 +32,7 @@ async function testAppValueDisplay(browser) {
   await page.waitForTimeout(1000);
 
   await expectColumnValues(page, Array.from({ length: 13 }, () => '0'));
+  await expectNumberBoardReady(page);
 
   await page.locator('#columns').fill('5');
   await page.locator('#columns').dispatchEvent('change');
@@ -48,6 +49,7 @@ async function testAppValueDisplay(browser) {
   const randomizedValues = await columnValues(page);
   assert.equal(randomizedValues.length, 13);
   assert.match(randomizedValues.join(''), /^[0-9]{13}$/);
+  assert.equal(await page.locator('#board-target').innerText(), String(Number(randomizedValues.join(''))));
 
   await page.locator('#columns').fill('5');
   await page.locator('#columns').dispatchEvent('change');
@@ -129,6 +131,13 @@ async function columnValues(page) {
   return page.locator('#column-controls .column-value').evaluateAll((nodes) => (
     nodes.map((node) => node.textContent || '')
   ));
+}
+
+async function expectNumberBoardReady(page) {
+  await page.waitForSelector('#number-board .number-cell');
+  assert.equal(await page.locator('#number-board .number-cell').count(), 9);
+  assert.equal(await page.locator('#board-target').innerText(), '0');
+  assert.equal(await page.locator('#board-go').isDisabled(), true);
 }
 
 function collectFailures(page) {

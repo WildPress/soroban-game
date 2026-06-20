@@ -1,7 +1,14 @@
-import { useCallback, useRef, useState } from 'react';
-import { createSorobanState, type SorobanState } from './soroban.js';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { createSorobanState, getTotalValue, type SorobanState } from './soroban.js';
 import { PlayCanvasBoard } from './PlayCanvasBoard.js';
 import type { BeadShapeStyle, ThemeName } from './playcanvasSoroban.js';
+import {
+  commitNumberBoardSelection,
+  createNumberBoard,
+  createUniquePairBoardValues,
+  previewNumberBoardValue,
+  type NumberBoardState
+} from './numberBoardGame.js';
 
 type StyleName = 'classic' | 'rounded' | 'sharp' | 'wide' | 'custom';
 type StylePreset = Readonly<{
@@ -70,14 +77,21 @@ const themeOptions = [
   { value: 'ash', label: 'Ash' },
   { value: 'slate', label: 'Slate' }
 ] as const satisfies ReadonlyArray<{ value: ThemeName; label: string }>;
+const numberBoardDimensions = {
+  width: 3,
+  height: 3
+} as const;
+const boardValues = createInitialBoardValues();
 
 export function App() {
   const [state, setState] = useState<SorobanState>(() => createSorobanState({ columns: 13 }));
+  const [numberBoard, setNumberBoard] = useState<NumberBoardState>(() => createNumberBoard(boardValues, numberBoardDimensions));
   const [theme, setTheme] = useState<ThemeName>('walnut');
   const [styleName, setStyleNameState] = useState<StyleName>(() => getSavedStyleName());
   const [customStyle, setCustomStyleState] = useState<BeadShapeStyle>(() => getSavedCustomStyle());
   const audioContextRef = useRef<AudioContext | null>(null);
   const activeBeadShape = styleName === 'custom' ? customStyle : stylePresets[styleName].beadShape;
+  const sorobanValue = getTotalValue(state);
 
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -156,6 +170,14 @@ export function App() {
     saveCustomStyle(nextStyle);
   }, []);
 
+  useEffect(() => {
+    setNumberBoard((currentBoard) => previewNumberBoardValue(currentBoard, sorobanValue).state);
+  }, [sorobanValue]);
+
+  const commitBoardSelection = useCallback(() => {
+    setNumberBoard((currentBoard) => commitNumberBoardSelection(currentBoard).state);
+  }, []);
+
   return (
     <main className="app-shell" aria-label="Soroban prototype">
       <section className="status-strip">
@@ -218,6 +240,49 @@ export function App() {
               Rnd
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="number-board-panel" aria-label="Number board">
+        <div className="number-board-header">
+          <div>
+            <span className="label">Target</span>
+            <strong id="board-target">{sorobanValue}</strong>
+          </div>
+          <button
+            id="board-go"
+            type="button"
+            disabled={numberBoard.highlightedCellIds.length === 0}
+            onClick={commitBoardSelection}
+          >
+            Go
+          </button>
+        </div>
+        <div
+          id="number-board"
+          className="number-board"
+          style={{ gridTemplateColumns: `repeat(${numberBoard.width}, minmax(0, 1fr))` }}
+        >
+          {numberBoard.cells.map((cell) => {
+            const highlighted = numberBoard.highlightedCellIds.includes(cell.id);
+
+            return (
+              <span
+                key={cell.id}
+                className={[
+                  'number-cell',
+                  highlighted ? 'is-highlighted' : '',
+                  cell.status === 'removed' ? 'is-removed' : ''
+                ].filter(Boolean).join(' ')}
+                data-cell-id={cell.id}
+                data-cell-value={cell.value}
+                data-cell-status={cell.status}
+                aria-label={`${cell.status === 'removed' ? 'Removed' : 'Active'} number ${cell.value}`}
+              >
+                {cell.status === 'removed' ? '' : cell.value}
+              </span>
+            );
+          })}
         </div>
       </section>
 
@@ -356,4 +421,10 @@ function roundToStep(value: number, step: number): number {
   const precision = Math.max(0, String(step).split('.')[1]?.length ?? 0);
 
   return Number(value.toFixed(precision));
+}
+
+function createInitialBoardValues(): readonly number[] {
+  return createUniquePairBoardValues(numberBoardDimensions.width * numberBoardDimensions.height, {
+    seeds: [27, 4, 8, 60, 71, 3, 13]
+  });
 }

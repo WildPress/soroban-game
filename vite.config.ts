@@ -2,6 +2,8 @@ import { resolve } from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
+const base = process.env.GITHUB_PAGES === 'true' ? '/soroban-game/' : '/';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
@@ -9,6 +11,7 @@ const corsHeaders = {
 };
 
 export default defineConfig({
+  base,
   plugins: [
     react(),
     {
