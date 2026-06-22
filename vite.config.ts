@@ -12,34 +12,7 @@ const corsHeaders = {
 
 export default defineConfig({
   base,
-  plugins: [
-    react(),
-    {
-      name: 'removed-cad-page',
-      configureServer(server) {
-        server.middlewares.use((request, response, next) => {
-          if (request.url === '/cad.html') {
-            response.statusCode = 404;
-            response.end('Not found');
-            return;
-          }
-
-          next();
-        });
-      },
-      configurePreviewServer(server) {
-        server.middlewares.use((request, response, next) => {
-          if (request.url === '/cad.html') {
-            response.statusCode = 404;
-            response.end('Not found');
-            return;
-          }
-
-          next();
-        });
-      }
-    }
-  ],
+  plugins: [react()],
   server: {
     cors: true,
     headers: corsHeaders
@@ -51,7 +24,8 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        app: resolve(__dirname, 'index.html')
+        app: resolve(__dirname, 'index.html'),
+        cad: resolve(__dirname, 'cad.html')
       }
     }
   }

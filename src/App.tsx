@@ -23,6 +23,7 @@ const styleStorageKey = 'soroban-style';
 const customStyleStorageKey = 'soroban-custom-style';
 const appearanceStorageKey = 'soroban-appearance';
 const slideDurationMs = 150;
+const githubUrl = 'https://github.com/WildPress/soroban-game';
 const stylePresets = {
   classic: {
     label: 'Classic',
@@ -448,6 +449,12 @@ export function App() {
             >
               Reset
             </button>
+            <a className="button-link" href="cad.html" target="_blank" rel="noreferrer">
+              CAD
+            </a>
+            <a className="button-link" href={githubUrl} target="_blank" rel="noreferrer">
+              GitHub
+            </a>
           </div>
         </div>
         <div id="column-controls" className="column-controls" aria-label="Column values">
