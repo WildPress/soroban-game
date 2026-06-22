@@ -10,6 +10,7 @@ import {
 import type { NumberBoardState } from './numberBoardGame.js';
 
 export type ThemeName = 'walnut' | 'ash' | 'slate';
+export type AppearanceName = 'dark' | 'light';
 export type BeadShapeStyle = Readonly<{
   tipRadius: number;
   shoulderRadius: number;
@@ -74,6 +75,10 @@ export class PlayCanvasSorobanRenderer {
   private readonly keyLight: pc.Entity;
   private readonly fillLight: pc.Entity;
   private readonly accentLight: pc.Entity;
+  private readonly rimLight: pc.Entity;
+  private readonly topLight: pc.Entity;
+  private readonly leftBounceLight: pc.Entity;
+  private readonly rightBounceLight: pc.Entity;
   private readonly root: pc.Entity;
   private readonly numberBoardRoot: pc.Entity;
   private materials: ReturnType<typeof createMaterials>;
@@ -100,8 +105,9 @@ export class PlayCanvasSorobanRenderer {
     this.app.setCanvasFillMode(pc.FILLMODE_NONE);
     this.app.setCanvasResolution(pc.RESOLUTION_AUTO);
     this.app.graphicsDevice.maxPixelRatio = getRenderPixelRatio();
-    this.app.scene.ambientLight = new pc.Color(0.68, 0.64, 0.58);
-    this.app.scene.exposure = 1.28;
+    this.app.scene.ambientLight = new pc.Color(0.46, 0.46, 0.46);
+    this.app.scene.exposure = 1.14;
+    this.app.scene.skyboxIntensity = 0.58;
 
     this.materials = createMaterials(this.app.graphicsDevice, 'walnut');
     this.numberBoardMaterials = createNumberBoardMaterials();
@@ -115,42 +121,92 @@ export class PlayCanvasSorobanRenderer {
       fov: 24,
       nearClip: 0.05
     });
+    if (this.camera.camera) {
+      this.camera.camera.shaderParams.toneMapping = pc.TONEMAP_ACES;
+      this.camera.camera.shaderParams.gammaCorrection = pc.GAMMA_SRGB;
+    }
     this.camera.setLocalPosition(0, -0.52, 8.9);
     this.camera.lookAt(0, -0.22, 0);
     this.app.root.addChild(this.camera);
 
     this.keyLight = new pc.Entity('key-light');
     this.keyLight.addComponent('light', {
-      castShadows: false,
-      color: new pc.Color(1, 0.94, 0.84),
-      intensity: 2.18,
-      shadowBias: 0.08,
+      castShadows: true,
+      color: new pc.Color(1, 1, 1),
+      intensity: 1.52,
+      normalOffsetBias: 0.035,
+      shadowBias: 0.18,
+      shadowDistance: 16,
+      shadowIntensity: 0.16,
+      shadowResolution: 1024,
+      shadowType: pc.SHADOW_PCF5,
       type: 'directional'
     });
-    this.keyLight.setLocalEulerAngles(50, 24, 12);
+    this.keyLight.setLocalEulerAngles(42, -34, 18);
     this.app.root.addChild(this.keyLight);
 
     this.fillLight = new pc.Entity('fill-light');
     this.fillLight.addComponent('light', {
       castShadows: false,
-      color: new pc.Color(0.68, 0.76, 1),
-      intensity: 0.54,
+      color: new pc.Color(1, 1, 1),
+      intensity: 0.58,
       type: 'directional'
     });
-    this.fillLight.setLocalEulerAngles(-22, -42, 0);
+    this.fillLight.setLocalEulerAngles(-18, 44, 0);
     this.app.root.addChild(this.fillLight);
 
     this.accentLight = new pc.Entity('accent-light');
     this.accentLight.addComponent('light', {
-      color: new pc.Color(1, 0.82, 0.56),
-      intensity: 0.34,
-      range: 7.5,
+      color: new pc.Color(1, 1, 1),
+      intensity: 0.16,
+      range: 5.8,
       type: 'omni'
     });
-    this.accentLight.setLocalPosition(-1.8, 1.4, 3.2);
+    this.accentLight.setLocalPosition(-2.4, 1.2, 3.5);
     this.app.root.addChild(this.accentLight);
+
+    this.rimLight = new pc.Entity('rim-light');
+    this.rimLight.addComponent('light', {
+      castShadows: false,
+      color: new pc.Color(1, 1, 1),
+      intensity: 0.44,
+      type: 'directional'
+    });
+    this.rimLight.setLocalEulerAngles(-36, 138, 0);
+    this.app.root.addChild(this.rimLight);
+
+    this.topLight = new pc.Entity('top-softbox-light');
+    this.topLight.addComponent('light', {
+      castShadows: false,
+      color: new pc.Color(1, 1, 1),
+      intensity: 0.58,
+      type: 'directional'
+    });
+    this.topLight.setLocalEulerAngles(80, 8, 0);
+    this.app.root.addChild(this.topLight);
+
+    this.leftBounceLight = new pc.Entity('left-bounce-light');
+    this.leftBounceLight.addComponent('light', {
+      castShadows: false,
+      color: new pc.Color(1, 1, 1),
+      intensity: 0.28,
+      type: 'directional'
+    });
+    this.leftBounceLight.setLocalEulerAngles(18, 82, -8);
+    this.app.root.addChild(this.leftBounceLight);
+
+    this.rightBounceLight = new pc.Entity('right-bounce-light');
+    this.rightBounceLight.addComponent('light', {
+      castShadows: false,
+      color: new pc.Color(1, 1, 1),
+      intensity: 0.24,
+      type: 'directional'
+    });
+    this.rightBounceLight.setLocalEulerAngles(18, -104, 8);
+    this.app.root.addChild(this.rightBounceLight);
     this.app.root.addChild(this.root);
     this.app.root.addChild(this.numberBoardRoot);
+    this.applyLightingPreset('dark');
     this.app.start();
   }
 
@@ -210,6 +266,18 @@ export class PlayCanvasSorobanRenderer {
   setTheme(theme: ThemeName, state: SorobanState): void {
     this.materials = createMaterials(this.app.graphicsDevice, theme);
     this.rebuild(state);
+  }
+
+  setAppearance(appearance: AppearanceName): void {
+    const color = appearance === 'light'
+      ? new pc.Color(0.94, 0.96, 0.95, 1)
+      : new pc.Color(0.067, 0.078, 0.09, 1);
+
+    if (this.camera.camera) {
+      this.camera.camera.clearColor = color;
+    }
+
+    this.applyLightingPreset(appearance);
   }
 
   setBeadShape(shape: BeadShapeStyle, state: SorobanState): void {
@@ -335,7 +403,7 @@ export class PlayCanvasSorobanRenderer {
         label.addComponent('render', {
           meshInstances: [labelMeshInstance]
         });
-        label.setLocalPosition(x, y, highlighted ? 0.16 : 0.08);
+        label.setLocalPosition(x, y, highlighted ? 0.28 : 0.24);
         label.setLocalScale(scale, scale, numberBubbleDepth);
       }
     }
@@ -441,35 +509,142 @@ export class PlayCanvasSorobanRenderer {
     window.cancelAnimationFrame(this.animationFrame);
     this.animationFrame = null;
   }
+
+  private applyLightingPreset(appearance: AppearanceName): void {
+    const preset = getLightingPreset(appearance);
+
+    this.app.scene.ambientLight = preset.ambient;
+    this.app.scene.exposure = preset.exposure;
+    this.app.scene.skyboxIntensity = preset.skyboxIntensity;
+    setLight(this.keyLight, preset.key);
+    setLight(this.fillLight, preset.fill);
+    setLight(this.accentLight, preset.accent);
+    setLight(this.rimLight, preset.rim);
+    setLight(this.topLight, preset.top);
+    setLight(this.leftBounceLight, preset.leftBounce);
+    setLight(this.rightBounceLight, preset.rightBounce);
+  }
+}
+
+type LightPreset = Readonly<{
+  color: pc.Color;
+  intensity: number;
+}>;
+
+type LightingPreset = Readonly<{
+  ambient: pc.Color;
+  exposure: number;
+  skyboxIntensity: number;
+  key: LightPreset;
+  fill: LightPreset;
+  accent: LightPreset;
+  rim: LightPreset;
+  top: LightPreset;
+  leftBounce: LightPreset;
+  rightBounce: LightPreset;
+}>;
+
+function getLightingPreset(appearance: AppearanceName): LightingPreset {
+  if (appearance === 'light') {
+    return {
+      ambient: new pc.Color(0.7, 0.7, 0.7),
+      exposure: 1.08,
+      skyboxIntensity: 0.7,
+      key: { color: new pc.Color(1, 1, 1), intensity: 1.2 },
+      fill: { color: new pc.Color(1, 1, 1), intensity: 0.7 },
+      accent: { color: new pc.Color(1, 1, 1), intensity: 0.1 },
+      rim: { color: new pc.Color(1, 1, 1), intensity: 0.38 },
+      top: { color: new pc.Color(1, 1, 1), intensity: 0.7 },
+      leftBounce: { color: new pc.Color(1, 1, 1), intensity: 0.36 },
+      rightBounce: { color: new pc.Color(1, 1, 1), intensity: 0.32 }
+    };
+  }
+
+  return {
+    ambient: new pc.Color(0.46, 0.46, 0.46),
+    exposure: 1.14,
+    skyboxIntensity: 0.58,
+    key: { color: new pc.Color(1, 1, 1), intensity: 1.52 },
+    fill: { color: new pc.Color(1, 1, 1), intensity: 0.58 },
+    accent: { color: new pc.Color(1, 1, 1), intensity: 0.12 },
+    rim: { color: new pc.Color(1, 1, 1), intensity: 0.44 },
+    top: { color: new pc.Color(1, 1, 1), intensity: 0.58 },
+    leftBounce: { color: new pc.Color(1, 1, 1), intensity: 0.28 },
+    rightBounce: { color: new pc.Color(1, 1, 1), intensity: 0.24 }
+  };
+}
+
+function setLight(entity: pc.Entity, preset: LightPreset): void {
+  if (!entity.light) {
+    return;
+  }
+
+  entity.light.color = preset.color;
+  entity.light.intensity = preset.intensity;
 }
 
 function createMaterials(device: pc.GraphicsDevice, themeName: ThemeName) {
   const theme = getTheme(themeName);
-  const frameTexture = createGrainTexture(device, `${themeName}-frame`, theme.frameTexture, 256, 128);
-  const beadTexture = createGrainTexture(device, `${themeName}-bead`, theme.beadTexture, 192, 96);
+  const frameTexture = createGrainTexture(device, `${themeName}-frame`, theme.frameTexture, 512, 256);
+  const beadTexture = createGrainTexture(device, `${themeName}-bead`, theme.beadTexture, 384, 192);
   const placeTexture = createGrainTexture(device, `${themeName}-place`, theme.placeTexture, 192, 96);
+  const frameTiling: [number, number] = [4.4, 1.6];
+  const beadTiling: [number, number] = [2.6, 1.4];
 
   return {
-    frame: material('frame', theme.frame, theme.frameGloss, 0, frameTexture, [3.4, 1]),
-    bead: material('bead', theme.bead, theme.beadGloss, 0, beadTexture, [1.6, 1]),
-    beadGrabbed: material('bead-grabbed', theme.bead, 0.95, 0, beadTexture, [1.6, 1], 0.14),
-    ebony: material('place-bead', theme.place, theme.placeGloss, 0, placeTexture, [1.6, 1]),
-    ebonyGrabbed: material('place-bead-grabbed', theme.place, 0.98, 0, placeTexture, [1.6, 1], 0.1),
-    brass: material('brass', new pc.Color(0.82, 0.58, 0.26), 0.58, 0.7),
-    rod: material('rod', new pc.Color(0.58, 0.58, 0.54), 0.26, 0.16)
+    frame: material('frame', theme.frame, theme.frameGloss, 0, frameTexture, frameTiling, {
+      clearCoat: 0.14,
+      clearCoatGloss: 0.28,
+      specularityFactor: 0.38,
+      textureEmissiveIntensity: 0.22
+    }),
+    bead: material('bead', theme.bead, theme.beadGloss, 0, beadTexture, beadTiling, {
+      clearCoat: 0.2,
+      clearCoatGloss: 0.34,
+      specularityFactor: 0.44,
+      textureEmissiveIntensity: 0.24
+    }),
+    beadGrabbed: material('bead-grabbed', theme.bead, 0.62, 0, beadTexture, beadTiling, {
+      clearCoat: 0.26,
+      clearCoatGloss: 0.42,
+      emissiveIntensity: 0.08,
+      specularityFactor: 0.5,
+      textureEmissiveIntensity: 0.28
+    }),
+    ebony: material('place-bead', theme.place, theme.placeGloss, 0, placeTexture, [1.6, 1], {
+      clearCoat: 0.18,
+      clearCoatGloss: 0.32,
+      specularityFactor: 0.4,
+      textureEmissiveIntensity: 0.18
+    }),
+    ebonyGrabbed: material('place-bead-grabbed', theme.place, 0.62, 0, placeTexture, [1.6, 1], {
+      clearCoat: 0.24,
+      clearCoatGloss: 0.42,
+      emissiveIntensity: 0.06,
+      specularityFactor: 0.48,
+      textureEmissiveIntensity: 0.22
+    }),
+    brass: material('brass', new pc.Color(0.82, 0.58, 0.26), 0.46, 0.74, undefined, [1, 1], {
+      clearCoat: 0.12,
+      clearCoatGloss: 0.48,
+      specularityFactor: 0.72
+    }),
+    rod: material('rod', new pc.Color(0.58, 0.58, 0.54), 0.22, 0.18, undefined, [1, 1], {
+      specularityFactor: 0.42
+    })
   };
 }
 
 function createNumberBoardMaterials() {
   return {
     active: [
-      numberBoardMaterial('bubble-active-teal', new pc.Color(0.13, 0.35, 0.36), new pc.Color(0.31, 0.76, 0.72), 0.98),
-      numberBoardMaterial('bubble-active-blue', new pc.Color(0.14, 0.24, 0.42), new pc.Color(0.37, 0.55, 0.95), 0.98),
-      numberBoardMaterial('bubble-active-plum', new pc.Color(0.32, 0.18, 0.34), new pc.Color(0.8, 0.44, 0.86), 0.98),
-      numberBoardMaterial('bubble-active-forest', new pc.Color(0.18, 0.34, 0.22), new pc.Color(0.54, 0.85, 0.5), 0.98),
-      numberBoardMaterial('bubble-active-slate', new pc.Color(0.24, 0.3, 0.36), new pc.Color(0.58, 0.68, 0.78), 0.98)
+      numberBoardMaterial('bubble-active-teal', new pc.Color(0.07, 0.24, 0.25), new pc.Color(0.22, 0.6, 0.56), 0.98),
+      numberBoardMaterial('bubble-active-blue', new pc.Color(0.08, 0.16, 0.34), new pc.Color(0.26, 0.42, 0.8), 0.98),
+      numberBoardMaterial('bubble-active-plum', new pc.Color(0.22, 0.1, 0.25), new pc.Color(0.56, 0.3, 0.64), 0.98),
+      numberBoardMaterial('bubble-active-forest', new pc.Color(0.11, 0.24, 0.15), new pc.Color(0.38, 0.66, 0.34), 0.98),
+      numberBoardMaterial('bubble-active-slate', new pc.Color(0.14, 0.2, 0.26), new pc.Color(0.42, 0.52, 0.64), 0.98)
     ],
-    highlighted: numberBoardMaterial('bubble-highlighted', new pc.Color(0.95, 0.55, 0.13), new pc.Color(1, 0.82, 0.36), 0.98),
+    highlighted: numberBoardMaterial('bubble-highlighted', new pc.Color(0.84, 0.42, 0.05), new pc.Color(1, 0.68, 0.22), 0.98),
     removed: numberBoardMaterial('bubble-removed', new pc.Color(0.08, 0.09, 0.1), new pc.Color(0.18, 0.2, 0.22), 0.3)
   };
 }
@@ -497,9 +672,9 @@ function createNumberLabelMesh(device: pc.GraphicsDevice): pc.Mesh {
   const uvs: number[] = [];
   const indices: number[] = [];
   const sphereRadius = 0.5;
-  const surfaceLift = 0.018;
-  const halfWidth = 0.36;
-  const halfHeight = 0.29;
+  const surfaceLift = 0.08;
+  const halfWidth = 0.4;
+  const halfHeight = 0.33;
   const columns = 18;
   const rows = 14;
 
@@ -544,13 +719,14 @@ function createNumberLabelMaterial(device: pc.GraphicsDevice, text: string, high
 
   material.name = `number-label-${text}-${highlighted ? 'highlighted' : 'normal'}`;
   material.diffuse = new pc.Color(1, 1, 1);
-  material.emissive = new pc.Color(1, 1, 1);
-  material.emissiveIntensity = highlighted ? 0.34 : 0.2;
+  material.emissive = new pc.Color(0, 0, 0);
+  material.emissiveIntensity = 0;
   material.diffuseMap = texture;
   material.opacityMap = texture;
   material.opacityMapChannel = 'a';
   material.useLighting = false;
   material.blendType = pc.BLEND_NORMAL;
+  material.depthTest = false;
   material.depthWrite = false;
   material.update();
 
@@ -573,35 +749,34 @@ function createNumberLabelTexture(device: pc.GraphicsDevice, text: string, highl
   context.save();
   context.translate(size / 2, size / 2);
   context.beginPath();
-  context.arc(0, 0, 90, 0, Math.PI * 2);
-  context.fillStyle = highlighted ? '#ffe2a3' : '#f7f2e8';
-  context.shadowColor = 'rgba(0, 0, 0, 0.35)';
-  context.shadowBlur = 12;
-  context.shadowOffsetY = 5;
+  context.arc(0, 0, 96, 0, Math.PI * 2);
+  context.fillStyle = highlighted ? '#fff0bf' : '#ffffff';
+  context.shadowColor = 'rgba(0, 0, 0, 0.46)';
+  context.shadowBlur = 10;
+  context.shadowOffsetY = 4;
   context.fill();
   context.shadowColor = 'transparent';
-  context.lineWidth = 9;
-  context.strokeStyle = highlighted ? 'rgba(120, 60, 10, 0.34)' : 'rgba(30, 38, 44, 0.22)';
+  context.lineWidth = 10;
+  context.strokeStyle = highlighted ? 'rgba(78, 36, 4, 0.5)' : 'rgba(5, 14, 19, 0.32)';
   context.stroke();
   context.beginPath();
-  context.arc(0, 0, 73, 0, Math.PI * 2);
-  context.lineWidth = 2;
-  context.strokeStyle = highlighted ? 'rgba(120, 60, 10, 0.24)' : 'rgba(30, 38, 44, 0.16)';
+  context.arc(0, 0, 77, 0, Math.PI * 2);
+  context.lineWidth = 3;
+  context.strokeStyle = highlighted ? 'rgba(78, 36, 4, 0.3)' : 'rgba(5, 14, 19, 0.18)';
   context.stroke();
   context.restore();
 
-  context.font = `850 ${text.length > 1 ? 88 : 106}px Inter, system-ui, sans-serif`;
+  context.font = `900 ${text.length > 2 ? 68 : text.length > 1 ? 84 : 112}px Inter, system-ui, sans-serif`;
   context.textAlign = 'center';
   context.textBaseline = 'middle';
   context.lineJoin = 'round';
-  context.shadowColor = 'rgba(255, 255, 255, 0.35)';
-  context.shadowBlur = 3;
+  context.shadowColor = 'rgba(255, 255, 255, 0.28)';
+  context.shadowBlur = 1;
   context.shadowOffsetY = 1;
-  context.lineWidth = 5;
-  context.strokeStyle = highlighted ? 'rgba(255, 235, 178, 0.34)' : 'rgba(255, 255, 255, 0.55)';
-  context.fillStyle = highlighted ? '#1a1207' : '#23313a';
-  context.strokeText(text, size / 2, size / 2 + 5);
-  context.fillText(text, size / 2, size / 2 + 5);
+  context.lineWidth = 4;
+  context.strokeStyle = highlighted ? '#160b02' : '#071116';
+  context.fillStyle = highlighted ? '#160b02' : '#071116';
+  drawTrackedText(context, text, size / 2, size / 2 + 5, text.length > 1 ? 7 : 0);
 
   const texture = new pc.Texture(device, {
     width: size,
@@ -611,6 +786,34 @@ function createNumberLabelTexture(device: pc.GraphicsDevice, text: string, highl
 
   texture.setSource(canvas);
   return texture;
+}
+
+function drawTrackedText(
+  context: CanvasRenderingContext2D,
+  text: string,
+  centerX: number,
+  centerY: number,
+  tracking: number
+): void {
+  if (tracking <= 0 || text.length <= 1) {
+    context.strokeText(text, centerX, centerY);
+    context.fillText(text, centerX, centerY);
+    return;
+  }
+
+  const glyphWidths = Array.from(text, (character) => context.measureText(character).width);
+  const totalWidth = glyphWidths.reduce((sum, width) => sum + width, 0) + tracking * (glyphWidths.length - 1);
+  let x = centerX - totalWidth / 2;
+
+  context.textAlign = 'left';
+
+  Array.from(text).forEach((character, index) => {
+    context.strokeText(character, x, centerY);
+    context.fillText(character, x, centerY);
+    x += (glyphWidths[index] ?? 0) + tracking;
+  });
+
+  context.textAlign = 'center';
 }
 
 function getNumberBoardRenderLayout(
@@ -689,7 +892,7 @@ function addJscadSorobanMeshes(
     const bead = isBeadMaterialKind(materialKind) ? model.beads[beadIndex] : undefined;
     const entity = new pc.Entity(bead ? bead.id : `jscad-part-${index}`);
 
-    meshInstance.castShadow = false;
+    meshInstance.castShadow = materialKind !== 'rod';
     meshInstance.receiveShadow = true;
     entity.addComponent('render', {
       meshInstances: [meshInstance]
@@ -989,9 +1192,17 @@ function material(
   metalness: number,
   diffuseMap?: pc.Texture,
   tiling: [number, number] = [1, 1],
-  emissiveIntensity = 0
+  options: Readonly<{
+    clearCoat?: number;
+    clearCoatGloss?: number;
+    emissiveIntensity?: number;
+    specularityFactor?: number;
+    textureEmissiveIntensity?: number;
+  }> = {}
 ): pc.StandardMaterial {
   const result = new pc.StandardMaterial();
+  const emissiveIntensity = options.emissiveIntensity ?? 0;
+
   result.name = name;
   result.diffuse = diffuse;
   result.diffuseMap = diffuseMap ?? null;
@@ -999,7 +1210,21 @@ function material(
   result.gloss = gloss;
   result.metalness = metalness;
   result.useMetalness = metalness > 0;
-  result.emissive = diffuse.clone().mulScalar(emissiveIntensity);
+  result.enableGGXSpecular = true;
+  result.fresnelModel = pc.FRESNEL_SCHLICK;
+  result.specularityFactor = options.specularityFactor ?? (metalness > 0 ? 0.7 : 0.42);
+  result.clearCoat = options.clearCoat ?? 0;
+  result.clearCoatGloss = options.clearCoatGloss ?? Math.min(0.5, gloss);
+  result.emissive = diffuseMap && options.textureEmissiveIntensity
+    ? new pc.Color(1, 1, 1)
+    : diffuse.clone();
+  result.emissiveIntensity = diffuseMap && options.textureEmissiveIntensity
+    ? options.textureEmissiveIntensity
+    : emissiveIntensity;
+  if (diffuseMap && options.textureEmissiveIntensity) {
+    result.emissiveMap = diffuseMap;
+    result.emissiveMapTiling = new pc.Vec2(tiling[0], tiling[1]);
+  }
   result.update();
   return result;
 }
@@ -1015,37 +1240,37 @@ function isSameBeadShape(left: BeadShapeStyle, right: BeadShapeStyle): boolean {
 function getTheme(themeName: ThemeName) {
   const themes = {
     walnut: {
-      frame: new pc.Color(0.5, 0.35, 0.23),
-      bead: new pc.Color(0.54, 0.35, 0.22),
-      place: new pc.Color(0.82, 0.6, 0.34),
-      frameGloss: 0.34,
-      beadGloss: 0.36,
-      placeGloss: 0.4,
-      frameTexture: ['#6f5136', '#8a6948', '#3b2618'],
-      beadTexture: ['#6c4a30', '#8a6040', '#3d291c'],
-      placeTexture: ['#b98b51', '#d8aa70', '#815d37']
+      frame: new pc.Color(0.64, 0.55, 0.5),
+      bead: new pc.Color(0.7, 0.6, 0.54),
+      place: new pc.Color(0.62, 0.72, 0.66),
+      frameGloss: 0.26,
+      beadGloss: 0.3,
+      placeGloss: 0.38,
+      frameTexture: ['#64554e', '#857166', '#352c28'],
+      beadTexture: ['#6d5b52', '#927c6e', '#3a2f2a'],
+      placeTexture: ['#7f9187', '#c5d3c9', '#3f5148']
     },
     ash: {
-      frame: new pc.Color(0.48, 0.44, 0.36),
-      bead: new pc.Color(0.54, 0.53, 0.49),
-      place: new pc.Color(0.74, 0.7, 0.6),
-      frameGloss: 0.3,
-      beadGloss: 0.34,
-      placeGloss: 0.38,
-      frameTexture: ['#807665', '#a39b89', '#5a5246'],
-      beadTexture: ['#85837b', '#b0aea6', '#5f5e58'],
-      placeTexture: ['#b7ae96', '#ddd3bc', '#8b826f']
+      frame: new pc.Color(0.88, 0.86, 0.79),
+      bead: new pc.Color(0.94, 0.91, 0.82),
+      place: new pc.Color(0.84, 0.8, 0.68),
+      frameGloss: 0.28,
+      beadGloss: 0.31,
+      placeGloss: 0.34,
+      frameTexture: ['#b0aa98', '#efe6c8', '#766f5f'],
+      beadTexture: ['#b7b19f', '#fff2cf', '#827a68'],
+      placeTexture: ['#cabf9f', '#eadfc3', '#a3967a']
     },
     slate: {
-      frame: new pc.Color(0.25, 0.27, 0.28),
-      bead: new pc.Color(0.34, 0.36, 0.36),
-      place: new pc.Color(0.62, 0.66, 0.64),
-      frameGloss: 0.42,
-      beadGloss: 0.48,
-      placeGloss: 0.58,
-      frameTexture: ['#303436', '#454a4c', '#1d2021'],
-      beadTexture: ['#4a4e4e', '#636767', '#2a2d2d'],
-      placeTexture: ['#9da7a3', '#c0cac6', '#68706e']
+      frame: new pc.Color(0.42, 0.46, 0.47),
+      bead: new pc.Color(0.5, 0.54, 0.54),
+      place: new pc.Color(0.72, 0.76, 0.73),
+      frameGloss: 0.36,
+      beadGloss: 0.4,
+      placeGloss: 0.5,
+      frameTexture: ['#495154', '#718083', '#22292b'],
+      beadTexture: ['#586062', '#87908f', '#2d3435'],
+      placeTexture: ['#aeb8b4', '#d0dad6', '#7d8783']
     }
   } as const;
 
@@ -1074,7 +1299,8 @@ function createGrainTexture(
 
   for (let y = 0; y < height; y += 1) {
     const wave = Math.sin(y * 0.12) * 11 + Math.sin(y * 0.035) * 22;
-    const alpha = 0.18 + (Math.sin(y * 0.21) + 1) * 0.06;
+    const alpha = 0.24 + (Math.sin(y * 0.21) + 1) * 0.08;
+    context.lineWidth = y % 11 === 0 ? 1.8 : 1;
     context.strokeStyle = y % 7 === 0 ? toRgba(palette[2], alpha) : toRgba(palette[1], alpha);
     context.beginPath();
     context.moveTo(0, y + Math.sin(y) * 0.7);

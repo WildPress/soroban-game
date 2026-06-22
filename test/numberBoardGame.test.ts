@@ -86,6 +86,17 @@ test('starter 3 by 3 board seed is deterministic', () => {
   assert.notEqual(values, createSeededNumberBoardValues('starter-3x3-v1'));
 });
 
+test('unknown board seeds generate deterministic unique pair boards', () => {
+  const firstValues = createSeededNumberBoardValues('board-test-seed-a', { count: 9 });
+  const secondValues = createSeededNumberBoardValues('board-test-seed-a', { count: 9 });
+  const otherValues = createSeededNumberBoardValues('board-test-seed-b', { count: 9 });
+
+  assert.deepEqual(firstValues, secondValues);
+  assert.notDeepEqual(firstValues, otherValues);
+  assert.equal(firstValues.length, 9);
+  assertUniquePairSums(firstValues);
+});
+
 test('isolated pair sums can still be matched directly', () => {
   const board = createNumberBoard(makeValues([43, 45]));
   const preview = previewNumberBoardValue(board, 88);

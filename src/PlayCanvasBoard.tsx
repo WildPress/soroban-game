@@ -15,6 +15,7 @@ type PlayCanvasBoardProps = Readonly<{
   state: SorobanState;
   numberBoard: NumberBoardState;
   theme: ThemeName;
+  appearance: 'dark' | 'light';
   beadShape: BeadShapeStyle;
   onCommitState: (state: SorobanState) => void;
   onInteractionStart: () => void;
@@ -33,6 +34,7 @@ export function PlayCanvasBoard({
   state,
   numberBoard,
   theme,
+  appearance,
   beadShape,
   onCommitState,
   onInteractionStart
@@ -50,6 +52,7 @@ export function PlayCanvasBoard({
     state: SorobanState;
     numberBoard: NumberBoardState;
     theme: ThemeName;
+    appearance: 'dark' | 'light';
     beadShape: BeadShapeStyle;
   } | null>(null);
 
@@ -163,18 +166,24 @@ export function PlayCanvasBoard({
     if (!previousRender) {
       renderer.rebuild(state, numberBoard);
       renderer.setTheme(theme, state);
+      renderer.setAppearance(appearance);
       renderer.setBeadShape(beadShape, state);
-      previousRenderRef.current = { state, numberBoard, theme, beadShape };
+      previousRenderRef.current = { state, numberBoard, theme, appearance, beadShape };
       return;
     }
 
     const themeChanged = previousRender.theme !== theme;
+    const appearanceChanged = previousRender.appearance !== appearance;
     const styleChanged = !isSameBeadShape(previousRender.beadShape, beadShape);
     const columnsChanged = previousRender.state.config.columns !== state.config.columns;
     const numberBoardChanged = previousRender.numberBoard !== numberBoard;
 
     if (themeChanged) {
       renderer.setTheme(theme, state);
+    }
+
+    if (appearanceChanged) {
+      renderer.setAppearance(appearance);
     }
 
     if (styleChanged) {
@@ -194,8 +203,8 @@ export function PlayCanvasBoard({
       }
     }
 
-    previousRenderRef.current = { state, numberBoard, theme, beadShape };
-  }, [state, numberBoard, theme, beadShape]);
+    previousRenderRef.current = { state, numberBoard, theme, appearance, beadShape };
+  }, [state, numberBoard, theme, appearance, beadShape]);
 
   return (
     <canvas

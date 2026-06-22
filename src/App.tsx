@@ -13,6 +13,7 @@ import {
 } from './numberBoardGame.js';
 
 type StyleName = 'classic' | 'rounded' | 'sharp' | 'wide' | 'custom';
+type AppearanceName = 'dark' | 'light';
 type StylePreset = Readonly<{
   label: string;
   beadShape: BeadShapeStyle;
@@ -20,6 +21,7 @@ type StylePreset = Readonly<{
 
 const styleStorageKey = 'soroban-style';
 const customStyleStorageKey = 'soroban-custom-style';
+const appearanceStorageKey = 'soroban-appearance';
 const slideDurationMs = 150;
 const stylePresets = {
   classic: {
@@ -83,14 +85,16 @@ const numberBoardDimensions = {
   width: 3,
   height: 3
 } as const;
-const numberBoardSeed = 'starter-3x3-v1';
-const boardValues = createInitialBoardValues();
-const sorobanColumns = getRequiredSorobanColumns(boardValues);
+const initialNumberBoardSeed = 'starter-3x3-v1';
+const initialBoardValues = createBoardValues(initialNumberBoardSeed);
+const initialSorobanColumns = getRequiredSorobanColumns(initialBoardValues);
 
 export function App() {
-  const [state, setState] = useState<SorobanState>(() => createSorobanState({ columns: sorobanColumns }));
-  const [numberBoard, setNumberBoard] = useState<NumberBoardState>(() => createNumberBoard(boardValues, numberBoardDimensions));
+  const [state, setState] = useState<SorobanState>(() => createSorobanState({ columns: initialSorobanColumns }));
+  const [boardSeed, setBoardSeed] = useState(initialNumberBoardSeed);
+  const [numberBoard, setNumberBoard] = useState<NumberBoardState>(() => createNumberBoard(initialBoardValues, numberBoardDimensions));
   const [theme, setTheme] = useState<ThemeName>('walnut');
+  const [appearance, setAppearanceState] = useState<AppearanceName>(() => getSavedAppearance());
   const [styleName, setStyleNameState] = useState<StyleName>(() => getSavedStyleName());
   const [customStyle, setCustomStyleState] = useState<BeadShapeStyle>(() => getSavedCustomStyle());
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -103,6 +107,7 @@ export function App() {
   const chainLength = numberBoard.highlightedCellIds.length;
   const chainScore = calculateChainScore(chainLength);
   const canCommitBoardSelection = numberBoard.highlightedCellIds.length > 0 && highlightedBoardValue === numberBoard.targetValue;
+  const requiredSorobanColumns = getRequiredSorobanColumns(numberBoard.cells.map((cell) => cell.value));
 
   const ensureAudioContext = useCallback(() => {
     if (!audioContextRef.current) {
@@ -181,6 +186,15 @@ export function App() {
     saveCustomStyle(nextStyle);
   }, []);
 
+  const setAppearance = useCallback((nextAppearance: AppearanceName) => {
+    setAppearanceState(nextAppearance);
+    saveAppearance(nextAppearance);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.appearance = appearance;
+  }, [appearance]);
+
   useEffect(() => {
     setNumberBoard((currentBoard) => previewNumberBoardValue(currentBoard, sorobanValue).state);
   }, [sorobanValue]);
@@ -198,8 +212,18 @@ export function App() {
     });
   }, []);
 
+  const resetBoardForSeed = useCallback((nextSeed: string) => {
+    const nextValues = createBoardValues(nextSeed);
+    const nextColumns = getRequiredSorobanColumns(nextValues);
+
+    setBoardSeed(nextSeed);
+    setNumberBoard(createNumberBoard(nextValues, numberBoardDimensions));
+    setState(createSorobanState({ columns: nextColumns }));
+    setScore(0);
+  }, []);
+
   return (
-    <main className="app-shell" aria-label="Soroban prototype">
+    <main className="app-shell" aria-label="Soroban prototype" data-appearance={appearance}>
       <section className="score-hud" aria-label="Score">
         <div>
           <span className="label">Score</span>
@@ -229,6 +253,7 @@ export function App() {
           state={state}
           numberBoard={numberBoard}
           theme={theme}
+          appearance={appearance}
           beadShape={activeBeadShape}
           onCommitState={commitState}
           onInteractionStart={ensureAudioContext}
@@ -312,25 +337,26 @@ export function App() {
           </button>
         </header>
         <div className="settings-grid">
-          <div>
-            <span className="label">Columns</span>
-            <input
-              id="columns"
-              type="number"
-              min="1"
-              max={sorobanColumns}
-              value={state.config.columns}
-              onChange={(event) => {
-                const columns = clampNumber(Number(event.currentTarget.value), [1, sorobanColumns], sorobanColumns);
-
-                setState((currentState) => createSorobanState({
-                  columns,
-                  values: currentState.values
-                }));
-              }}
-            />
+          <div className="settings-field settings-field-mode">
+            <span className="label">Mode</span>
+            <div className="segmented-control" role="group" aria-label="Color mode">
+              {(['dark', 'light'] as const).map((mode) => (
+                <button
+                  key={mode}
+                  id={`${mode}-mode`}
+                  className={appearance === mode ? 'is-selected' : ''}
+                  type="button"
+                  aria-pressed={appearance === mode}
+                  onClick={() => {
+                    setAppearance(mode);
+                  }}
+                >
+                  {mode === 'dark' ? 'Dark' : 'Light'}
+                </button>
+              ))}
+            </div>
           </div>
-          <div>
+          <div className="settings-field">
             <span className="label">Theme</span>
             <select
               id="theme"
@@ -344,7 +370,7 @@ export function App() {
               ))}
             </select>
           </div>
-          <div>
+          <div className="settings-field">
             <span className="label">Style</span>
             <div className="inline-control">
               <select
@@ -372,18 +398,27 @@ export function App() {
               </button>
             </div>
           </div>
-          <div>
+          <div className="settings-field settings-field-seed">
             <span className="label">Seed</span>
             <div className="seed-control">
-              <input id="board-seed" type="text" readOnly value={numberBoardSeed} />
+              <input id="board-seed" type="text" readOnly value={boardSeed} />
               <button
                 id="copy-seed"
                 type="button"
                 onClick={() => {
-                  void navigator.clipboard?.writeText(numberBoardSeed);
+                  void navigator.clipboard?.writeText(boardSeed);
                 }}
               >
                 Copy
+              </button>
+              <button
+                id="randomize-seed"
+                type="button"
+                onClick={() => {
+                  resetBoardForSeed(createRandomBoardSeed());
+                }}
+              >
+                Random
               </button>
             </div>
           </div>
@@ -408,7 +443,7 @@ export function App() {
               id="reset"
               type="button"
               onClick={() => {
-                commitState(createSorobanState({ columns: state.config.columns }));
+                commitState(createSorobanState({ columns: requiredSorobanColumns }));
               }}
             >
               Reset
@@ -459,6 +494,26 @@ function saveCustomStyle(nextStyle: BeadShapeStyle): void {
   } catch {
     // Local storage can be unavailable in private or constrained browser contexts.
   }
+}
+
+function getSavedAppearance(): AppearanceName {
+  try {
+    return toAppearanceName(window.localStorage.getItem(appearanceStorageKey) ?? 'dark');
+  } catch {
+    return 'dark';
+  }
+}
+
+function saveAppearance(nextAppearance: AppearanceName): void {
+  try {
+    window.localStorage.setItem(appearanceStorageKey, nextAppearance);
+  } catch {
+    // Local storage can be unavailable in private or constrained browser contexts.
+  }
+}
+
+function toAppearanceName(value: string): AppearanceName {
+  return value === 'light' ? 'light' : 'dark';
 }
 
 function toStyleName(value: string): StyleName {
@@ -512,8 +567,23 @@ function roundToStep(value: number, step: number): number {
   return Number(value.toFixed(precision));
 }
 
-function createInitialBoardValues(): readonly number[] {
-  return createSeededNumberBoardValues(numberBoardSeed);
+function createBoardValues(seed: string): readonly number[] {
+  return createSeededNumberBoardValues(seed, {
+    count: numberBoardDimensions.width * numberBoardDimensions.height
+  });
+}
+
+function createRandomBoardSeed(): string {
+  const randomValues = new Uint32Array(2);
+
+  if (window.crypto?.getRandomValues) {
+    window.crypto.getRandomValues(randomValues);
+  } else {
+    randomValues[0] = Math.floor(Math.random() * 0xffffffff);
+    randomValues[1] = Math.floor(Math.random() * 0xffffffff);
+  }
+
+  return `board-${(randomValues[0] ?? 0).toString(36)}-${(randomValues[1] ?? 0).toString(36)}`;
 }
 
 function getRequiredSorobanColumns(values: readonly number[]): number {

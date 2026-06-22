@@ -47,11 +47,17 @@ export type UniquePairBoardOptions = Readonly<{
   minValue?: number;
 }>;
 
-const seededNumberBoardValues = {
-  'starter-3x3-v1': [27, 4, 8, 60, 71, 3, 13, 6, 42]
-} as const satisfies Record<string, readonly number[]>;
+export type SeededNumberBoardValueOptions = Readonly<{
+  count?: number;
+  maxValue?: number;
+  minValue?: number;
+}>;
 
-export type NumberBoardSeed = keyof typeof seededNumberBoardValues;
+const seededNumberBoardValues: Readonly<Record<string, readonly number[]>> = {
+  'starter-3x3-v1': [27, 4, 8, 60, 71, 3, 13, 6, 42]
+} as const;
+
+export type NumberBoardSeed = string;
 
 const defaultWidth = 10;
 const defaultHeight = 10;
@@ -193,8 +199,18 @@ export function createUniquePairBoardValues(count: number, options: UniquePairBo
   return values;
 }
 
-export function createSeededNumberBoardValues(seed: NumberBoardSeed): readonly number[] {
-  return [...seededNumberBoardValues[seed]];
+export function createSeededNumberBoardValues(
+  seed: NumberBoardSeed,
+  options: SeededNumberBoardValueOptions = {}
+): readonly number[] {
+  const storedValues = seededNumberBoardValues[seed];
+  const count = options.count ?? storedValues?.length ?? defaultWidth * defaultHeight;
+
+  if (storedValues && storedValues.length === count) {
+    return [...storedValues];
+  }
+
+  return createDeterministicUniquePairBoardValues(seed, count, options);
 }
 
 export function commitNumberBoardSelection(state: NumberBoardState): NumberBoardCommit {
@@ -379,6 +395,76 @@ function addUniquePairValue(
   }
 
   values.push(value);
+}
+
+function createDeterministicUniquePairBoardValues(
+  seed: string,
+  count: number,
+  options: SeededNumberBoardValueOptions
+): readonly number[] {
+  if (!Number.isInteger(count) || count <= 0) {
+    throw new Error('Seeded board count must be a positive integer.');
+  }
+
+  const minValue = options.minValue ?? 1;
+  const maxValue = options.maxValue ?? Math.max(99, count * 28);
+  const random = createSeededRandom(seed);
+  const values: number[] = [];
+  const pairSums = new Set<number>();
+  const blockedSingleValues = new Set<number>();
+  const randomAttemptLimit = Math.max(count * maxValue * 8, count * 32);
+  let attempts = 0;
+
+  if (!Number.isInteger(minValue) || minValue < 1 || !Number.isInteger(maxValue) || maxValue < minValue) {
+    throw new Error('Seeded board value range must contain positive integers.');
+  }
+
+  while (values.length < count && attempts < randomAttemptLimit) {
+    const candidate = minValue + Math.floor(random() * (maxValue - minValue + 1));
+
+    if (canAddUniquePairValue(values, pairSums, blockedSingleValues, candidate)) {
+      addUniquePairValue(values, pairSums, blockedSingleValues, candidate);
+    }
+
+    attempts += 1;
+  }
+
+  let fallbackCandidate = minValue;
+
+  while (values.length < count) {
+    if (canAddUniquePairValue(values, pairSums, blockedSingleValues, fallbackCandidate)) {
+      addUniquePairValue(values, pairSums, blockedSingleValues, fallbackCandidate);
+    }
+
+    fallbackCandidate += 1;
+  }
+
+  return values;
+}
+
+function createSeededRandom(seed: string): () => number {
+  let state = hashSeed(seed);
+
+  return () => {
+    state += 0x6D2B79F5;
+    let value = state;
+
+    value = Math.imul(value ^ value >>> 15, value | 1);
+    value ^= value + Math.imul(value ^ value >>> 7, value | 61);
+
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+function hashSeed(seed: string): number {
+  let hash = 2166136261;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash ^= seed.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
 }
 
 function getCellsById(cells: readonly NumberBoardCell[], ids: readonly string[]): readonly NumberBoardCell[] {
